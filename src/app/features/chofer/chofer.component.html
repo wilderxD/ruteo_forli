@@ -1,0 +1,159 @@
+<div class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4 mb-4">
+  <div class="flex flex-wrap justify-between items-center gap-3">
+    <div *ngIf="placas.length > 1" class="flex items-center gap-3">
+      <span class="text-sm font-medium text-[#5B403D]"><i class="fas fa-route mr-1"></i>Ruta / Unidad</span>
+      <select (change)="cambiarPlaca()" [(ngModel)]="placa" class="campo px-3 py-1.5 text-sm font-medium text-slate-700 bg-white focus:border-[#D32F2F]">
+        <option *ngFor="let p of placas" [value]="p">{{ p }}</option>
+      </select>
+    </div>
+    <h6 *ngIf="placas.length <= 1" class="font-semibold text-slate-700 flex items-center gap-2">
+      <i class="fas fa-truck mr-2 text-[#D32F2F]"></i>Unidad: <span class="plate">{{ placa }}</span>
+    </h6>
+    <button *ngIf="esAdmin" (click)="volverAdmin()" class="text-sm text-[#5B403D] hover:text-[#D32F2F] transition ml-auto btn-ghost">
+      <i class="fas fa-arrow-left mr-1"></i> Panel Admin
+    </button>
+  </div>
+</div>
+
+<div class="nav-tabs-custom flex mb-4">
+  <button class="flex-1 py-2 text-center text-sm font-medium transition-all" [class.active]="tabActiva === 'hoy'" (click)="cambiarTab('hoy')">
+    <i class="fas fa-sun mr-1"></i> HOY
+  </button>
+  <button class="flex-1 py-2 text-center text-sm font-medium transition-all" [class.active]="tabActiva === 'manana'" (click)="cambiarTab('manana')">
+    <i class="fas fa-calendar-alt mr-1"></i> PRÓXIMA ENTREGA
+  </button>
+</div>
+
+<div *ngIf="tabActiva === 'hoy'" class="space-y-3">
+  <div class="relative">
+    <i class="fas fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-[#F57C00] text-sm"></i>
+    <select [(ngModel)]="distritoHoy" class="campo w-full pl-10 pr-4 py-2.5 text-sm bg-white focus:border-[#D32F2F]">
+      <option value="ALL">📌 Todos los distritos ({{ rutasHoy.length }})</option>
+      <option *ngFor="let d of opcionesDistritoHoy" [value]="d">{{ d }}</option>
+    </select>
+  </div>
+  <div *ngIf="cargando" class="flex justify-center py-10">
+    <span class="loader"></span>
+  </div>
+  <div *ngIf="!cargando && filtrarHoy().length === 0" class="bg-slate-50 rounded-lg p-6 text-center text-slate-500">Sin asignaciones para hoy.</div>
+  <div *ngIf="!cargando && filtrarHoy().length > 0" class="space-y-3">
+  <div *ngFor="let r of filtrarHoy()" class="bg-white rounded-lg border border-[#E0E0E0] border-l-4 border-l-[#D32F2F] shadow-sm card-hover">
+    <div class="p-3">
+      <div class="flex justify-between items-start">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <strong class="text-slate-700 text-sm">{{ r.cliente }}</strong>
+            <span class="px-2 py-0.5 bg-[#FFF8F7] text-[#5B403D] rounded-sm text-xs f-data">{{ r.distrito }}</span>
+            <span class="px-2 py-0.5 rounded text-xs border font-medium f-data" [class]="estadoInfo(r).clase">{{ estadoInfo(r).texto }}</span>
+          </div>
+          <div class="text-xs text-[#5B403D] mb-0.5">{{ r.direccion }}</div>
+          <div class="text-xs font-medium text-[#BA1A1A] f-data">Ped: {{ r.pedido }}</div>
+          <div *ngIf="r.observaciones" class="mt-2 p-2 bg-[#FFE9E7] rounded-lg text-xs text-[#B25E00] border border-[#E4BEBA]">
+            <i class="fas fa-exclamation-triangle mr-1"></i>{{ r.observaciones }}
+          </div>
+          <div class="mt-2">
+            <ng-container *ngFor="let n of numerosWsp(r.telefono)">
+              <a [href]="'tel:' + n.tel" class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg mr-1 btn-ghost hover:bg-slate-200">
+                <i class="fas fa-phone"></i> <span class="f-data">{{ n.tel }}</span>
+              </a>
+              <a [href]="'https://wa.me/' + n.wsp" target="_blank" class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[#005F7B]/10 text-[#005F7B] rounded-lg btn-ghost hover:bg-[#005F7B]/20">
+                <i class="fab fa-whatsapp"></i> Chat
+              </a>
+            </ng-container>
+          </div>
+        </div>
+        <div class="ml-3">
+          <div class="sello"><span>ORDEN</span>{{ r.ordenActual || '-' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<div *ngIf="tabActiva === 'manana'" class="space-y-3">
+  <div class="flex gap-2">
+    <div class="relative flex-1">
+      <i class="fas fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-[#F57C00] text-sm"></i>
+      <select [(ngModel)]="distritoManana" (ngModelChange)="renderizarMapa()" class="campo w-full pl-10 pr-4 py-2.5 text-sm bg-white focus:border-[#D32F2F]">
+        <option value="ALL">📌 Todos los distritos ({{ rutasPlanificadas.length }})</option>
+        <option *ngFor="let d of opcionesDistritoManana" [value]="d">{{ d }}</option>
+      </select>
+    </div>
+    <button (click)="autoRutear()" [disabled]="autoRuteando || cargando" class="px-4 py-2.5 bg-[#005F7B] hover:bg-[#004a61] disabled:opacity-50 text-white rounded-lg transition font-medium btn-ghost" title="Generar orden automático por GPS">
+      <i class="fas fa-route mr-1"></i> Auto-rutear
+    </button>
+    <button (click)="restablecerOrdenes()" class="px-4 py-2.5 text-[#BA1A1A] hover:bg-red-50 rounded-lg transition border border-red-200 btn-ghost" title="Borrar números">
+      <i class="fas fa-eraser"></i>
+    </button>
+  </div>
+  <div *ngIf="cargando" class="flex justify-center py-10">
+    <span class="loader"></span>
+  </div>
+  <div *ngIf="mostrarMapa" class="rounded-lg overflow-hidden border border-[#E0E0E0] shadow-sm">
+    <div id="mapaRuta" class="h-[300px] w-full z-0"></div>
+  </div>
+  <div *ngIf="modoManual && pendientes.length > 0" class="bg-[#FFF8F7] rounded-lg border border-[#E4BEBA] p-3 space-y-2">
+    <div class="flex items-center justify-between">
+      <span class="text-sm font-semibold text-[#BA1A1A]"><i class="fas fa-exclamation-triangle mr-1"></i>Direcciones no ubicadas ({{ pendientes.length }})</span>
+    </div>
+    <p class="text-xs text-[#5B403D]">Arrastra el marcador rojo en el mapa o pulsa "Ubicar" y haz clic en el mapa para señalizar la dirección.</p>
+    <div *ngFor="let r of pendientes" class="bg-white rounded-lg border border-[#E0E0E0] p-2 flex flex-col sm:flex-row sm:items-center gap-2">
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium text-slate-700 truncate">{{ r.cliente }} <span class="text-xs text-[#BA1A1A] f-data">Ped: {{ r.pedido }}</span></div>
+        <div class="text-xs text-slate-500 truncate">{{ r.direccion }} — {{ r.distrito }}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span *ngIf="ubicadaManual(r)" class="text-xs text-[#2E7D32]"><i class="fas fa-check mr-1"></i>Ubicada</span>
+        <button (click)="seleccionarParaUbicar(r)" class="px-3 py-1.5 text-xs bg-[#D32F2F] hover:bg-[#AF101A] text-white rounded-lg transition font-medium" [class.opacity-60]="pendienteSeleccionado === r">
+          <i class="fas fa-map-pin mr-1"></i>{{ pendienteSeleccionado === r ? 'Clic en el mapa' : 'Ubicar' }}
+        </button>
+      </div>
+    </div>
+    <div class="flex gap-2 pt-1">
+      <button (click)="confirmarOrdenar()" class="flex-1 bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-2 rounded-lg text-sm font-semibold transition">
+        <i class="fas fa-check mr-1"></i> Confirmar y ordenar
+      </button>
+      <button (click)="omitirOrdenar()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg text-sm font-semibold transition">
+        Omitir y ordenar
+      </button>
+    </div>
+  </div>
+  <div *ngIf="!cargando && filtrarManana().length === 0" class="bg-slate-50 rounded-lg p-6 text-center text-slate-500">No hay planificación disponible.</div>
+  <div *ngIf="!cargando && filtrarManana().length > 0">
+  <div *ngFor="let r of filtrarManana()" class="bg-white rounded-lg border border-[#E0E0E0] border-l-4 border-l-[#D32F2F] shadow-sm card-hover">
+    <div class="p-3">
+      <div class="flex flex-col md:flex-row justify-between gap-3">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <strong class="text-slate-700 text-sm">{{ r.cliente }}</strong>
+            <span class="px-2 py-0.5 bg-[#FFF8F7] text-[#5B403D] rounded-sm text-xs f-data">{{ r.distrito }}</span>
+          </div>
+          <div class="text-xs text-[#5B403D] mb-0.5">{{ r.direccion }}</div>
+          <div class="text-xs font-medium text-[#BA1A1A] f-data">Ped: {{ r.pedido }}</div>
+          <div *ngIf="r.observaciones" class="mt-2 p-2 bg-[#FFE9E7] rounded-lg text-xs text-[#B25E00] border border-[#E4BEBA]">{{ r.observaciones }}</div>
+          <div class="mt-2">
+            <ng-container *ngFor="let n of numerosWsp(r.telefono)">
+              <a [href]="'tel:' + n.tel" class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg mr-1 btn-ghost hover:bg-slate-200">
+                <i class="fas fa-phone"></i> <span class="f-data">{{ n.tel }}</span>
+              </a>
+              <a [href]="'https://wa.me/' + n.wsp + '?text=' + mensajeWsp(r)" target="_blank" class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[#005F7B]/10 text-[#1D4ED8] rounded-lg btn-ghost hover:bg-[#005F7B]/20">
+                <i class="fab fa-whatsapp"></i> Notificar
+              </a>
+            </ng-container>
+          </div>
+        </div>
+        <div class="md:w-32 flex md:block items-center gap-2">
+          <label class="text-xs text-[#5B403D] block mb-1">N° orden</label>
+          <input type="number" class="campo w-full rounded-lg px-3 py-2 text-sm text-center font-medium focus:border-[#D32F2F]" [value]="r.ordenActual" (change)="setOrden(r, $any($event.target).value)" placeholder="#">
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sticky-bottom-bar" *ngIf="filtrarManana().length > 0">
+    <button (click)="guardar()" class="w-full bg-[#D32F2F] hover:bg-[#AF101A] text-white py-3 rounded-lg font-semibold transition-colors duration-200 shadow-md">
+      <i class="fas fa-save mr-2"></i> Guardar Orden de Entrega
+    </button>
+  </div>
+  </div>
+</div>

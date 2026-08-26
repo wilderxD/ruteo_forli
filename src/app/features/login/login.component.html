@@ -1,0 +1,23 @@
+<div class="fade-in flex items-center justify-center min-h-screen">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden border border-[#E0E0E0]">
+    <div class="bg-[#121212] px-6 py-8 text-center">
+      <i class="fas fa-truck-ramp-box text-4xl text-[#D32F2F] mb-3"></i>
+      <h2 class="text-2xl font-bold text-white f-display tracking-wide">Transporte Forli</h2>
+      <p class="text-[#9A8F8C] text-sm mt-1 f-data tracking-wide uppercase">Panel Logístico de Operaciones</p>
+    </div>
+    <div class="p-6 space-y-4">
+      <div class="relative">
+        <i class="fas fa-id-card absolute left-4 top-1/2 -translate-y-1/2 text-[#5B403D]"></i>
+        <input type="text" inputmode="numeric" [(ngModel)]="usuario" name="usuario" class="campo w-full pl-11 pr-4 py-3 focus:border-[#D32F2F]" placeholder="Número de DNI">
+      </div>
+      <div class="relative">
+        <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-[#5B403D]"></i>
+        <input type="password" [(ngModel)]="password" name="password" class="campo w-full pl-11 pr-4 py-3 focus:border-[#D32F2F]" placeholder="Contraseña">
+      </div>
+      <p *ngIf="error" class="text-sm text-[#BA1A1A] bg-red-50 border border-red-200 rounded-lg px-3 py-2">{{ error }}</p>
+      <button (click)="ingresar()" [disabled]="cargando" class="w-full bg-[#D32F2F] hover:bg-[#AF101A] text-white py-3 rounded-lg font-semibold transition-colors duration-200 disabled:opacity-60">
+        <i class="fas fa-arrow-right-to-bracket mr-2"></i> {{ cargando ? 'Ingresando…' : 'Ingresar al Sistema' }}
+      </button>
+    </div>
+  </div>
+</div>

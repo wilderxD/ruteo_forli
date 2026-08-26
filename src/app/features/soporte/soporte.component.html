@@ -1,0 +1,105 @@
+<div class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+      <h3 class="font-bold text-xl text-slate-800 f-display tracking-wide"><i class="fas fa-headset mr-2 text-[#D32F2F]"></i>Atenciones de Soporte</h3>
+      <p class="text-xs text-[#5B403D] mt-0.5">Gestión integral e incidencias operativas</p>
+    </div>
+    <div class="flex flex-wrap gap-2 w-full md:w-auto">
+      <button (click)="descargarReporte()" class="flex-1 md:flex-none bg-[#D32F2F] hover:bg-[#AF101A] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-200 shadow-sm">
+        <i class="fas fa-download mr-1"></i> Reporte Obs. Soporte
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+    <div class="relative">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[#5B403D] text-sm"></i>
+      <input type="text" [(ngModel)]="query" (input)="query = $any($event.target).value" class="campo w-full pl-9 pr-4 py-2 text-sm bg-white focus:border-[#D32F2F]" placeholder="Buscar Cliente o Pedido...">
+    </div>
+    <div class="relative">
+      <i class="fas fa-truck absolute left-3 top-1/2 -translate-y-1/2 text-[#5B403D] text-sm"></i>
+      <select [(ngModel)]="filtroPlaca" class="campo w-full pl-9 pr-4 py-2 text-sm bg-white focus:border-[#D32F2F]">
+        <option value="ALL">Todas las placas</option>
+        <option *ngFor="let p of placas" [value]="p">{{ p }}</option>
+      </select>
+    </div>
+    <div class="relative">
+      <i class="fas fa-map-marker-alt absolute left-3 top-1/2 -translate-y-1/2 text-[#5B403D] text-sm"></i>
+      <select [(ngModel)]="filtroDistrito" class="campo w-full pl-9 pr-4 py-2 text-sm bg-white focus:border-[#D32F2F]">
+        <option value="ALL">Todos los distritos</option>
+        <option *ngFor="let d of distritos" [value]="d">{{ d }}</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="filtrar().length === 0" class="text-center py-8 text-slate-400 bg-white rounded-lg border border-dashed border-slate-300">No se encontraron registros de atención</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+  <div *ngFor="let r of filtrar()" (click)="abrirDetalle(r)" class="bg-white rounded-lg border border-[#E0E0E0] p-4 shadow-sm hover:shadow-md transition-all cursor-pointer card-hover">
+    <div class="flex justify-between items-start mb-2">
+      <h5 class="font-bold text-slate-800 text-base text-[#AF101A]">{{ r.cliente }}</h5>
+      <span class="badge px-2 py-0.5 rounded text-xs bg-[#FFF8F7] border border-[#E0E0E0] font-medium text-[#5B403D] f-data">
+        <i class="fas fa-location-dot text-[#F57C00] mr-1"></i>{{ r.distrito }}
+      </span>
+    </div>
+    <p class="text-xs text-[#5B403D] mb-1 f-data"><span class="font-bold">N° Pedido:</span> {{ r.pedido }}</p>
+    <p class="text-xs text-slate-600 mb-2"><span class="font-bold">Unidad:</span> {{ r.placa || 'Por asignar' }}</p>
+    <div *ngIf="r.observacionesSoporte" class="mt-2 p-2 bg-[#D32F2F]/10 rounded-lg text-xs text-[#AF101A] border border-[#D32F2F]/30 text-ellipsis overflow-hidden whitespace-nowrap">
+      <i class="fas fa-comment-dots mr-1"></i>{{ r.observacionesSoporte }}
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalle -->
+<div *ngIf="editando" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" (click)="cerrarDetalle()">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" (click)="$event.stopPropagation()">
+    <div class="p-5 space-y-3 text-sm">
+      <div class="flex justify-between items-start">
+        <h3 class="text-base font-bold text-slate-800"><i class="fas fa-edit text-[#D32F2F] mr-2"></i>Atención Soporte</h3>
+        <button (click)="cerrarDetalle()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+      </div>
+
+      <div><span class="font-bold text-[#5B403D] block text-xs">CLIENTE</span><div class="text-base font-bold text-slate-800">{{ editando.cliente }}</div></div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><span class="font-bold text-[#5B403D] block text-xs">PEDIDO / SERIE</span><div class="font-semibold text-slate-700 f-data">{{ editando.pedido }} / {{ editando.seriePedido }}</div></div>
+        <div><span class="font-bold text-[#5B403D] block text-xs">DISTRITO</span><div class="font-semibold text-slate-700">{{ editando.distrito }}</div></div>
+      </div>
+      <div><span class="font-bold text-[#5B403D] block text-xs">DIRECCIÓN</span><div class="text-xs text-slate-600">{{ editando.direccion }}</div></div>
+      <div>
+        <span class="font-bold text-[#5B403D] block text-xs"><i class="fas fa-address-book text-slate-400 mr-1"></i>TELÉFONOS DE CONTACTO</span>
+        <div class="mt-1 flex flex-wrap">
+          <ng-container *ngFor="let n of numerosWsp(editando.telefono)">
+            <a [href]="'tel:' + n" class="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition font-semibold btn-ghost mr-2">
+              <i class="fas fa-phone text-slate-500"></i> <span class="f-data">{{ n }}</span>
+            </a>
+            <a [href]="'https://wa.me/' + n" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-[#005F7B]/10 text-[#005F7B] rounded-lg hover:bg-[#005F7B]/20 transition font-semibold btn-ghost">
+              <i class="fab fa-whatsapp"></i> Chat
+            </a>
+          </ng-container>
+          <span *ngIf="!editando.telefono" class="text-xs text-slate-400 italic">No registrado</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><span class="font-bold text-[#5B403D] block text-xs">SITUACIÓN</span><span class="badge bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs font-bold">{{ editando.situacion }}</span></div>
+        <div><span class="font-bold text-[#5B403D] block text-xs">RESPUESTA</span><span class="badge bg-[#D32F2F]/10 text-[#AF101A] px-2 py-0.5 rounded text-xs font-bold">{{ editando.respuesta }}</span></div>
+      </div>
+      <div><span class="font-bold text-[#5B403D] block text-xs">OBSERVACIÓN DEL PEDIDO</span><div class="p-2 bg-slate-50 rounded border text-xs text-slate-600">{{ editando.observacionPedido || 'Ninguna' }}</div></div>
+      <hr class="my-1 border-slate-200">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div><label class="font-bold text-slate-700 block mb-1 text-xs">CAMIÓN / PLACA</label><select [(ngModel)]="edPlaca" class="campo w-full p-2 text-sm bg-white focus:border-[#D32F2F]"><option value="">-- Sin Asignar --</option><option *ngFor="let p of placas" [value]="p">{{ p }}</option></select></div>
+        <div><label class="font-bold text-slate-700 block mb-1 text-xs">CHOFER</label><select [(ngModel)]="edChofer" class="campo w-full p-2 text-sm bg-white focus:border-[#D32F2F]"><option value="">-- Sin Asignar --</option><option *ngFor="let c of choferes" [value]="c">{{ c }}</option></select></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div><label class="font-bold text-slate-700 block mb-1 text-xs">CÓDIGO ATC</label><input type="text" [(ngModel)]="edAtc" class="campo w-full p-2 text-sm text-[#AF101A] font-bold focus:border-[#D32F2F]"></div>
+        <div><label class="font-bold text-slate-700 block mb-1 text-xs">MOTIVO</label><select [(ngModel)]="edMotivo" class="campo w-full p-2 text-sm bg-white focus:border-[#D32F2F]"><option value="">-- Seleccionar Motivo --</option><option *ngFor="let m of motivos" [value]="m">{{ m }}</option></select></div>
+      </div>
+      <div><label class="font-bold text-slate-700 block mb-1 text-xs">OBSERVACIONES SOPORTE</label><textarea [(ngModel)]="edObs" rows="2" class="campo w-full p-2 text-sm focus:border-[#D32F2F]" placeholder="Añadir notas del caso de soporte..."></textarea></div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button (click)="cerrarDetalle()" class="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200 transition btn-ghost">Cancelar</button>
+        <button (click)="guardar()" class="px-4 py-2 bg-[#2E7D32] hover:bg-[#1b5e20] text-white text-sm font-semibold rounded-lg transition"><i class="fas fa-save mr-1"></i> Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>

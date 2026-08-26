@@ -1,0 +1,31 @@
+<nav class="bg-[#121212] border-b border-[#263238] px-4 py-3 sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <div class="flex items-center gap-3">
+      <i class="fas fa-truck-ramp-box text-[#D32F2F] text-xl"></i>
+      <span class="font-bold text-lg text-white f-display tracking-wide">Transporte Forli</span>
+      <span class="text-sm text-[#9A8F8C] ml-1">| {{ nombre }}</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <ng-container *ngIf="sesion.rol === 'admin' || sesion.rol === 'soporte'">
+        <button (click)="ir('/soporte')" [class]="activa('/soporte') ? 'text-[#D32F2F] border-[#D32F2F]/40' : 'text-[#D32F2F] border-[#D32F2F]/40'" class="px-3 py-1.5 text-sm font-semibold hover:bg-[#263238] rounded-lg transition border btn-ghost">
+          <i class="fas fa-headset mr-1"></i> Soporte
+        </button>
+        <button (click)="ir('/entregas')" class="px-3 py-1.5 text-sm font-semibold text-[#7BD1F8] hover:bg-[#263238] rounded-lg transition border border-[#005F7B]/40 btn-ghost">
+          <i class="fas fa-camera-retro mr-1"></i> Entregas
+        </button>
+      </ng-container>
+      <ng-container *ngIf="sesion.rol === 'admin'">
+        <button (click)="ir('/admin')" class="px-3 py-1.5 text-sm font-semibold text-[#F57C00] hover:bg-[#263238] rounded-lg transition border border-[#F57C00]/40 btn-ghost">
+          <i class="fas fa-chart-line mr-1"></i> Admin
+        </button>
+      </ng-container>
+      <button (click)="salir()" class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#FFB3AC] hover:bg-[#263238] rounded-lg transition btn-ghost">
+        <i class="fas fa-sign-out-alt"></i> Salir
+      </button>
+    </div>
+  </div>
+</nav>
+
+<div class="max-w-7xl mx-auto px-4 py-4">
+  <router-outlet></router-outlet>
+</div>
