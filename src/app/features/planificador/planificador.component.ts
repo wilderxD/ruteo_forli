@@ -204,6 +204,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
 
   cerrarModalCodigo(): void {
     this.modalCodigoAbierto = false;
+    this.cdr.detectChanges();
   }
 
   async guardarCodigo(): Promise<void> {
@@ -240,6 +241,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
 
   cerrarModalVehiculo(): void {
     this.modalVehiculoAbierto = false;
+    this.cdr.detectChanges();
   }
 
   async guardarVehiculo(): Promise<void> {
@@ -282,6 +284,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   cerrarModalCodigosPendientes(): void {
     this.modalCodigosAbierto = false;
     this.codigosPendientes = [];
+    this.cdr.detectChanges();
   }
 
   async guardarCodigosPendientes(): Promise<void> {
@@ -326,13 +329,19 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   cerrarModalRuta(): void {
     this.modalRutaAbierto = false;
     this.modalRutaPlaca = '';
-    try {
-      if (this.modalRutaMapa) this.modalRutaMapa.remove();
-    } catch {
-      // ignorar
-    }
+    this.cdr.detectChanges();
+    const m = this.modalRutaMapa;
     this.modalRutaMapa = undefined;
     this.modalRutaCapas = undefined;
+    if (m) {
+      setTimeout(() => {
+        try {
+          m.remove();
+        } catch {
+          // ignorar
+        }
+      }, 0);
+    }
   }
 
   private inicializarMapaRuta(): void {
@@ -714,13 +723,19 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
     this.modalLng = null;
     this.candidatoSeleccionado = null;
     this.marcadoresCandidatos = [];
-    try {
-      if (this.modalMap) this.modalMap.remove();
-    } catch {
-      // ignorar
-    }
+    this.cdr.detectChanges();
+    const m = this.modalMap;
     this.modalMap = undefined;
     this.modalMarker = undefined;
+    if (m) {
+      setTimeout(() => {
+        try {
+          m.remove();
+        } catch {
+          // ignorar
+        }
+      }, 0);
+    }
   }
 
   @HostListener('document:keydown.escape')
