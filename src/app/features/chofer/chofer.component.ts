@@ -7,7 +7,7 @@ import * as L from 'leaflet';
 import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
-import { Ruta, RutaCompleta } from '../../core/models';
+import { Ruta, RutaCompleta, CandidatoGeo } from '../../core/models';
 
 @Component({
   selector: 'app-chofer',
@@ -34,6 +34,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
   pendientes: Ruta[] = [];
   pendienteSeleccionado: Ruta | null = null;
   ubicadasManual = new Set<string>();
+  candidatosPorPedido = new Map<string, CandidatoGeo[]>();
   private map?: L.Map;
   private capas?: L.LayerGroup;
   private mapaListo = false;
@@ -319,15 +320,14 @@ export class ChoferComponent implements OnInit, OnDestroy {
     return 2 * R * Math.asin(Math.sqrt(a));
   }
 
-  /** Ordena las rutas por distrito (termina todo un distrito antes de pasar al siguiente),
-   *  encadenando los distritos desde el último punto visitado. Dentro de cada distrito
-   *  usa el vecino más cercano desde el punto de entrada. */
+  /** Ordena por distrito (termina todo un distrito antes de pasar al siguiente), encadenando
+   *  los distritos desde el último punto visitado; dentro de cada distrito usa el vecino más cercano. */
   private ordenarPorCercania(rutas: Ruta[], baseLat: number, baseLng: number): Ruta[] {
     const grupos = new Map<string, Ruta[]>();
     rutas.forEach(r => {
-      const key = (r.distrito || 'SIN DISTRITO').trim().toUpperCase() || 'SIN DISTRITO';
-      if (!grupos.has(key)) grupos.set(key, []);
-      grupos.get(key)!.push(r);
+      const dist = (r.distrito || 'SIN DISTRITO').trim().toUpperCase() || 'SIN DISTRITO';
+      if (!grupos.has(dist)) grupos.set(dist, []);
+      grupos.get(dist)!.push(r);
     });
 
     const ordenadas: Ruta[] = [];
@@ -337,33 +337,30 @@ export class ChoferComponent implements OnInit, OnDestroy {
     while (grupos.size > 0) {
       let mejorKey: string | null = null;
       let mejorDist = Infinity;
-
-      grupos.forEach((lista, key) => {
-        lista.forEach(r => {
+      for (const key of grupos.keys()) {
+        grupos.get(key)!.forEach(r => {
           const d = this.haversineKm(lat, lng, parseFloat(r.lat!), parseFloat(r.lng!));
           if (d < mejorDist) {
             mejorDist = d;
             mejorKey = key;
           }
         });
-      });
-
+      }
       if (!mejorKey) break;
 
-      const grupo = grupos.get(mejorKey)!;
-      const pendientes = [...grupo];
-      while (pendientes.length > 0) {
+      const pts = grupos.get(mejorKey)!;
+      while (pts.length > 0) {
         let mejor = 0;
         let menor = Infinity;
-        for (let i = 0; i < pendientes.length; i++) {
-          const r = pendientes[i];
+        for (let i = 0; i < pts.length; i++) {
+          const r = pts[i];
           const d = this.haversineKm(lat, lng, parseFloat(r.lat!), parseFloat(r.lng!));
           if (d < menor) {
             menor = d;
             mejor = i;
           }
         }
-        const siguiente = pendientes.splice(mejor, 1)[0];
+        const siguiente = pts.splice(mejor, 1)[0];
         ordenadas.push(siguiente);
         lat = parseFloat(siguiente.lat!);
         lng = parseFloat(siguiente.lng!);
@@ -401,11 +398,21 @@ export class ChoferComponent implements OnInit, OnDestroy {
       }
     }
 
-    // Direcciones que el backend no pudo ubicar (usó centro de distrito o no encontró nada)
-    const noEncontradas = (resumenGeo?.detalles || []).filter((d: any) => !d.encontrada);
+    // Direcciones que el backend no pudo ubicar con certeza (estado !== 'ubicada')
+    const noEncontradas = (resumenGeo?.detalles || []).filter((d: any) =>
+      d.estado ? d.estado !== 'ubicada' : !d.encontrada
+    );
     this.pendientes = noEncontradas.length > 0
       ? this.rutasPlanificadas.filter(r => noEncontradas.some((d: any) => String(d.pedido) === String(r.pedido)))
       : [];
+
+    // Candidatos de las direcciones con múltiples coincidencias
+    this.candidatosPorPedido = new Map<string, CandidatoGeo[]>();
+    noEncontradas
+      .filter((d: any) => d.estado === 'multiple' && Array.isArray(d.candidatos))
+      .forEach((d: any) => {
+        this.candidatosPorPedido.set(String(d.pedido), d.candidatos as CandidatoGeo[]);
+      });
 
     // Fase de señalización manual: NO se asigna el orden hasta confirmar
     if (this.pendientes.length > 0) {
@@ -415,7 +422,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
       this.renderizarMapa();
       this.swal.aviso(
-        `${this.pendientes.length} dirección(es) no se ubicaron. Señalízalas en el mapa (arrastra el marcador o usa "Ubicar" y haz clic) y luego confirma para asignar el orden.`,
+        `${this.pendientes.length} dirección(es) con geolocalización incierta. Elige una coincidencia, arrastra el marcador o usa "Ubicar" y haz clic en el mapa. Luego confirma para asignar el orden.`,
         'warning'
       );
       return;
@@ -476,6 +483,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
     this.pendientes = [];
     this.pendienteSeleccionado = null;
     this.ubicadasManual = new Set<string>();
+    this.candidatosPorPedido = new Map<string, CandidatoGeo[]>();
     this.asignarOrden();
   }
 
@@ -485,6 +493,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
     this.pendientes = [];
     this.pendienteSeleccionado = null;
     this.ubicadasManual = new Set<string>();
+    this.candidatosPorPedido = new Map<string, CandidatoGeo[]>();
     this.asignarOrden();
   }
 
@@ -496,11 +505,29 @@ export class ChoferComponent implements OnInit, OnDestroy {
     this.pendienteSeleccionado = this.pendienteSeleccionado === r ? null : r;
   }
 
+  candidatosDe(r: Ruta): CandidatoGeo[] {
+    return this.candidatosPorPedido.get(String(r.pedido)) ?? [];
+  }
+
+  elegirCandidato(r: Ruta, cand: CandidatoGeo): void {
+    r.lat = String(cand.lat);
+    r.lng = String(cand.lng);
+    this.ubicadasManual.add(String(r.pedido));
+    this.pendienteSeleccionado = null;
+    this.cdr.detectChanges();
+    this.renderizarMapa();
+  }
+
+  esCandidatoElegido(r: Ruta, c: CandidatoGeo): boolean {
+    return this.ubicadaManual(r) && r.lat === String(c.lat) && r.lng === String(c.lng);
+  }
+
   private resetearManual(): void {
     this.modoManual = false;
     this.pendientes = [];
     this.pendienteSeleccionado = null;
     this.ubicadasManual = new Set<string>();
+    this.candidatosPorPedido = new Map<string, CandidatoGeo[]>();
   }
 
   async guardar(): Promise<void> {

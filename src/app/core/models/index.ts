@@ -107,3 +107,77 @@ export interface DatosExcel {
   rutas: unknown[][];
   asignacion: unknown[][];
 }
+
+export interface EstadoPlanificacion {
+  success: boolean;
+  hojaLista: boolean;
+  total: number;
+  sinCoords: number;
+  porDistrito: Record<string, number>;
+  placas: string[];
+  vehiculos?: VehiculoConfig[];
+  codigosSinComposicion?: { codigo: string; cantidad: number }[];
+  backendVersion?: string;
+}
+
+export interface VehiculoConfig {
+  placa: string;
+  capacidad: number;
+  zonas: string[];
+}
+
+export interface PedidoAsignado {
+  pedido: string;
+  filas: number[];
+  cliente: string;
+  distrito: string;
+  direccion: string;
+  referencia: string;
+  observaciones: string;
+  lat: string;
+  lng: string;
+  orden: number;
+  unidades: number;
+}
+
+export interface AsignacionVehiculo {
+  placa: string;
+  capacidad: number;
+  unidades: number;
+  zonas: string[];
+  km: number;
+  distritos: string[];
+  pedidos: PedidoAsignado[];
+}
+
+export interface ResultadoDistribucion {
+  success: boolean;
+  vehiculos: AsignacionVehiculo[];
+  kmTotal: number;
+  distribuidos: number;
+  sinUbicar: number;
+  noAsignados?: { pedido: string; cliente: string; unidades: number; motivo: string }[];
+  advertencias?: { codigo: string; cantidad: number }[];
+  base: { lat: number; lng: number };
+}
+
+export interface CandidatoGeo {
+  lat: number;
+  lng: number;
+  direccion: string;
+}
+
+export interface DetalleGeo {
+  pedido: string;
+  filas: number[];
+  cliente: string;
+  direccion: string;
+  referencia: string;
+  distrito: string;
+  lat: string;
+  lng: string;
+  estado: 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada';
+  candidatos: CandidatoGeo[];
+  queryUsado?: string;
+  distritoOk?: boolean;
+}

@@ -1,0 +1,397 @@
+<div class="space-y-4">
+
+  <!-- Paso 1: Datos -->
+  <div class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h3 class="font-bold text-slate-800 f-display tracking-wide"><i class="fas fa-route mr-2 text-[#D32F2F]"></i>Planificador de Flota</h3>
+      <span *ngIf="backendVersion" class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Backend v: {{ backendVersion }}</span>
+      <button (click)="cargarEstado()" class="text-sm text-[#5B403D] hover:text-[#D32F2F] transition font-medium btn-ghost">
+        <i class="fas fa-sync-alt mr-1"></i> Refrescar
+      </button>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+      <div class="bg-slate-50 rounded-lg p-3 text-center">
+        <div class="text-2xl font-bold text-slate-800">{{ estado?.total ?? 0 }}</div>
+        <div class="text-xs text-slate-500">Pedidos en planificación</div>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3 text-center">
+        <div class="text-2xl font-bold text-[#2E7D32]">{{ (estado?.total ?? 0) - (estado?.sinCoords ?? 0) }}</div>
+        <div class="text-xs text-slate-500">Ubicados</div>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3 text-center">
+        <div class="text-2xl font-bold text-[#D32F2F]">{{ estado?.sinCoords ?? 0 }}</div>
+        <div class="text-xs text-slate-500">Sin ubicar</div>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3 text-center">
+        <div class="text-2xl font-bold text-slate-800">{{ placasDisponibles.length }}</div>
+        <div class="text-xs text-slate-500">Vehículos disponibles</div>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="px-4 py-2 text-sm font-semibold text-[#D32F2F] hover:bg-[#D32F2F]/10 rounded-lg transition border border-[#D32F2F]/40 bg-white cursor-pointer">
+        <i class="fas fa-upload mr-1"></i> Subir archivo (Excel/CSV)
+        <input type="file" accept=".xlsx,.xls,.csv" (change)="onArchivoSeleccionado($event)" class="hidden">
+      </label>
+      <button (click)="abrirModalCodigo()" class="px-4 py-2 text-sm font-semibold text-[#2E7D32] hover:bg-[#2E7D32]/10 rounded-lg transition border border-[#2E7D32]/40 bg-white">
+        <i class="fas fa-plus-circle mr-1"></i> Registrar producto
+      </button>
+      <button (click)="abrirModalVehiculo()" class="px-4 py-2 text-sm font-semibold text-[#1565C0] hover:bg-sky-50 rounded-lg transition border border-[#1565C0]/40 bg-white">
+        <i class="fas fa-plus-circle mr-1"></i> Agregar vehículo
+      </button>
+      <button *ngIf="estado?.codigosSinComposicion?.length" (click)="abrirModalCodigosPendientes()" class="px-4 py-2 text-sm font-semibold text-[#B25E00] hover:bg-[#FFF4E5] rounded-lg transition border border-[#B25E00]/40 bg-white">
+        <i class="fas fa-exclamation-triangle mr-1"></i> {{ estado!.codigosSinComposicion!.length }} código(s) sin composición
+      </button>
+    </div>
+    <p class="text-xs text-slate-500 mt-2">
+      "composicion" = código del producto → unidades que trae el combo. "vehiculos" = placa → capacidad (uds) y zonas permitidas (vacío = todas). Las hojas se crean automáticamente si faltan.
+    </p>
+
+    <div *ngIf="distritoKeys.length > 0" class="mt-3 flex flex-wrap gap-2">
+      <span *ngFor="let d of distritoKeys" class="inline-block px-2 py-0.5 bg-[#FFF8F7] text-[#5B403D] rounded-sm text-xs">{{ d }}: {{ estado!.porDistrito[d] }}</span>
+    </div>
+  </div>
+
+  <!-- Paso 2: Geolocalizar -->
+  <div class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h4 class="font-bold text-slate-800"><i class="fas fa-satellite mr-2 text-[#2E7D32]"></i>Geolocalizar pedidos</h4>
+        <p class="text-xs text-slate-500 mt-1">Busca las coordenadas de las direcciones (procesa por lotes). Luego revisa la tabla: hay direcciones con varias coincidencias o sin encontrar.</p>
+      </div>
+      <button (click)="geocodificar()" [disabled]="geocodificando || (estado?.sinCoords ?? 0) === 0" class="px-4 py-2 text-sm font-semibold text-white bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg transition disabled:opacity-40">
+        <i class="fas fa-location-arrow mr-1"></i> {{ geocodificando ? 'Geolocalizando...' : 'Geolocalizar' }}
+      </button>
+    </div>
+    <div *ngIf="geocodificando" class="mt-3">
+      <div class="w-full bg-[#E8ECEB] rounded-full h-2 overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-300 bg-[#2E7D32]" [style.width]="(geoProgreso / (geoTotal || 1)) * 100 + '%'"></div>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">{{ geoProgreso }} / {{ geoTotal }} pedidos procesados...</p>
+    </div>
+  </div>
+
+  <!-- Tabla de geolocalización -->
+  <div *ngIf="detallesGeo.length > 0" class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h4 class="font-bold text-slate-800"><i class="fas fa-table mr-2 text-[#1565C0]"></i>Resultado de geolocalización</h4>
+      <div class="flex flex-wrap gap-1">
+        <button *ngFor="let f of ['todas', 'ubicada', 'multiple', 'centro_distrito', 'no_encontrada']"
+          (click)="setFiltroGeo(f)"
+          class="px-2 py-1 text-xs rounded-full border transition font-medium"
+          [class.bg-[#121212]]="filtroGeo === f"
+          [class.text-white]="filtroGeo === f"
+          [class.text-slate-600]="filtroGeo !== f"
+          [class.border-[#E0E0E0]]="filtroGeo !== f">
+          {{ f === 'todas' ? 'Todas' : f === 'ubicada' ? '✓ Ubicadas' : f === 'multiple' ? '⚠ Múltiples' : f === 'centro_distrito' ? '🏙 Centro' : '✗ No encontradas' }} ({{ contarGeo(f) }})
+        </button>
+      </div>
+    </div>
+    <div class="overflow-auto max-h-[420px] rounded-lg border border-[#E0E0E0]">
+      <table class="w-full text-sm">
+        <thead class="sticky top-0 bg-[#121212] text-white text-left text-xs">
+          <tr>
+            <th class="px-3 py-2">Cliente</th>
+            <th class="px-3 py-2">Pedido</th>
+            <th class="px-3 py-2">Dirección</th>
+            <th class="px-3 py-2">Referencia</th>
+            <th class="px-3 py-2">Distrito</th>
+            <th class="px-3 py-2">Estado</th>
+            <th class="px-3 py-2">Lat, Lng</th>
+            <th class="px-3 py-2">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let d of geoFiltrados" class="border-t border-[#E0E0E0] align-top">
+            <td class="px-3 py-2 text-slate-700">{{ d.cliente }}</td>
+            <td class="px-3 py-2 f-data text-[#BA1A1A]">{{ d.pedido || 'SIN N°' }}</td>
+            <td class="px-3 py-2 text-slate-600 max-w-[220px]">{{ d.direccion }}</td>
+            <td class="px-3 py-2 text-slate-500 max-w-[180px]">{{ d.referencia }}</td>
+            <td class="px-3 py-2 text-slate-600">{{ d.distrito }}</td>
+            <td class="px-3 py-2">
+              <span class="inline-block px-2 py-0.5 rounded-full border text-xs font-medium" [class]="estadoGeoInfo(d).clase">{{ estadoGeoInfo(d).texto }}</span>
+              <span *ngIf="d.distritoOk === false && (d.estado === 'ubicada' || d.estado === 'multiple')" class="inline-block mt-1 px-2 py-0.5 rounded-full border border-[#B25E00]/40 bg-[#FFF4E5] text-[#B25E00] text-[10px] font-medium">Posible otro distrito</span>
+            </td>
+            <td class="px-3 py-2 f-data text-xs text-slate-500">
+              <span *ngIf="d.lat && d.lng">{{ d.lat }}, {{ d.lng }}</span>
+              <span *ngIf="!d.lat || !d.lng">—</span>
+            </td>
+            <td class="px-3 py-2">
+              <div *ngIf="d.estado === 'multiple' || d.distritoOk === false" class="flex flex-col gap-1">
+                <button *ngFor="let c of d.candidatos; let i = index"
+                  (click)="elegirCandidato(d, c)"
+                  [title]="c.direccion"
+                  class="px-2 py-1 text-xs rounded-lg border text-left transition font-medium border-[#B25E00]/40 text-[#B25E00] hover:bg-[#FFF4E5]">
+                  Opción {{ i + 1 }}: {{ c.lat.toFixed(5) }}, {{ c.lng.toFixed(5) }}
+                </button>
+              </div>
+              <button *ngIf="d.estado === 'multiple' || d.estado === 'centro_distrito' || d.estado === 'no_encontrada' || d.distritoOk === false"
+                (click)="abrirModalSenalizar(d)"
+                class="px-2 py-1 text-xs rounded-lg border border-[#1565C0]/40 text-[#1565C0] hover:bg-sky-50 transition font-medium">
+                <i class="fas fa-map-pin mr-1"></i> Señalizar
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="geoFiltrados.length === 0">
+            <td colspan="8" class="px-3 py-6 text-center text-slate-400">Sin resultados para este filtro.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Paso 3: Distribuir -->
+  <div class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <div>
+        <h4 class="font-bold text-slate-800"><i class="fas fa-truck-ramp-box mr-2 text-[#F57C00]"></i>Distribuir en vehículos</h4>
+        <p class="text-xs text-slate-500 mt-1">Elige las unidades. Se minimiza la distancia total; cada ruta termina un lado de la Panamericana (OESTE/ESTE) antes de pasar al otro.</p>
+      </div>
+      <button (click)="distribuir()" [disabled]="asignando || placasSeleccionadas.length === 0" class="px-4 py-2 text-sm font-semibold text-white bg-[#F57C00] hover:bg-[#E65100] rounded-lg transition disabled:opacity-40">
+        <i class="fas fa-magic mr-1"></i> {{ asignando ? 'Optimizando...' : 'Optimizar' }}
+      </button>
+    </div>
+    <div class="flex flex-wrap gap-2 items-center">
+      <div *ngFor="let p of placasDisponibles" class="inline-flex items-center gap-1">
+        <label
+          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-sm font-medium transition"
+          [class.bg-[#FFF8F7]]="seleccionPlacas[p]"
+          [class.border-[#D32F2F]]="seleccionPlacas[p]"
+          [class.border-[#E0E0E0]]="!seleccionPlacas[p]">
+          <input type="checkbox" [(ngModel)]="seleccionPlacas[p]" class="accent-[#D32F2F]">
+          <span class="font-bold">{{ p }}</span>
+          <span class="text-[10px] text-slate-500 f-data">{{ capacidadDe(p) }} uds</span>
+          <span *ngIf="zonasDe(p).length" class="text-[10px] text-[#1565C0]">{{ zonasDe(p).join('·') }}</span>
+        </label>
+        <button (click)="abrirModalVehiculo(p)" title="Editar capacidad y zonas de {{ p }}" class="w-7 h-7 flex items-center justify-center rounded-lg border border-[#E0E0E0] text-slate-400 hover:text-[#1565C0] hover:border-[#1565C0]/40 transition">
+          <i class="fas fa-pen text-xs"></i>
+        </button>
+      </div>
+      <span *ngIf="placasDisponibles.length === 0" class="text-sm text-slate-500">No hay vehículos registrados en la hoja "vehiculos" (usa "Agregar vehículo").</span>
+    </div>
+    <p class="text-xs text-slate-500 mt-2">{{ placasSeleccionadas.length }} vehículo(s) seleccionado(s).</p>
+  </div>
+
+  <!-- Paso 4: Resultado + Aplicar -->
+  <div *ngIf="resultado" class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <div>
+        <h4 class="font-bold text-slate-800"><i class="fas fa-map-location-dot mr-2 text-[#1565C0]"></i>Resultado de la distribución</h4>
+        <p class="text-xs text-slate-500 mt-1">
+          {{ resultado.distribuidos }} pedidos · {{ resultado.vehiculos.length }} vehículos · <b>{{ resultado.kmTotal }} km</b> totales estimados.
+        </p>
+      </div>
+      <button (click)="aplicar()" class="px-4 py-2 text-sm font-semibold text-white bg-[#1565C0] hover:bg-[#0D47A1] rounded-lg transition">
+        <i class="fas fa-check-double mr-1"></i> Aplicar a "rutas"
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="md:col-span-1 space-y-2">
+        <div *ngFor="let v of resultado.vehiculos; let vi = index"
+          (click)="placaMapa = v.placa; cambiarPlacaMapa()"
+          class="rounded-lg border p-2 cursor-pointer transition"
+          [class.bg-[#FFF8F7]]="placaMapa === v.placa"
+          [class.border-[#D32F2F]]="placaMapa === v.placa"
+          [class.border-[#E0E0E0]]="placaMapa !== v.placa">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full inline-block" [style.background]="paletaColores[vi % paletaColores.length]"></span>
+            <span class="font-bold text-sm text-slate-800">{{ v.placa }}</span>
+            <span class="text-xs text-slate-500 ml-auto">{{ v.pedidos.length }} pedidos</span>
+          </div>
+          <div class="flex items-center gap-2 mt-1">
+            <span *ngIf="v.capacidad" class="text-[10px] font-bold rounded-full px-1.5 py-0.5" [class.bg-[#2E7D32]/10]="v.unidades <= v.capacidad" [class.text-[#2E7D32]]="v.unidades <= v.capacidad" [class.bg-red-50]="v.unidades > v.capacidad" [class.text-red-700]="v.unidades > v.capacidad">{{ v.unidades }}/{{ v.capacidad }} uds</span>
+            <span *ngFor="let z of v.zonas" class="text-[10px] rounded-full bg-sky-50 text-[#1565C0] px-1.5 py-0.5 border border-[#BBDEFB]">{{ z }}</span>
+          </div>
+          <div class="text-xs text-slate-500 mt-1">{{ v.distritos.join(' · ') }}</div>
+          <div class="flex items-center justify-between mt-1">
+            <div class="text-xs text-[#1565C0]">≈ {{ v.km }} km</div>
+            <button (click)="abrirModalRuta(v.placa); $event.stopPropagation()" class="px-2 py-1 text-[11px] font-semibold text-white bg-[#1565C0] hover:bg-[#0D47A1] rounded-lg transition">
+              <i class="fas fa-route mr-1"></i> Ver ruta
+            </button>
+          </div>
+        </div>
+        <div *ngIf="resultado.sinUbicar > 0" class="rounded-lg border border-[#E0E0E0] p-2 text-xs text-slate-500">
+          <i class="fas fa-exclamation-triangle text-[#D32F2F] mr-1"></i> {{ resultado.sinUbicar }} pedido(s) sin ubicar quedarán sin placa.
+        </div>
+        <div *ngIf="resultado.noAsignados?.length" class="rounded-lg border border-[#B25E00]/40 bg-[#FFF4E5] p-2 text-xs">
+          <div class="font-semibold text-[#B25E00] mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Sin placa (capacidad/zona):</div>
+          <div *ngFor="let n of resultado.noAsignados" class="text-slate-600">Ped {{ n.pedido }} — {{ n.cliente }} ({{ n.unidades }} uds): {{ n.motivo }}</div>
+        </div>
+        <div *ngIf="resultado.advertencias?.length" class="rounded-lg border border-[#B25E00]/40 bg-[#FFF4E5] p-2 text-xs">
+          <div class="font-semibold text-[#B25E00] mb-1"><i class="fas fa-box-open mr-1"></i>Códigos sin composición (contaron 1 ud):</div>
+          <div *ngFor="let a of resultado.advertencias" class="text-slate-600">{{ a.codigo }} ({{ a.cantidad }} uds)</div>
+        </div>
+      </div>
+      <div class="md:col-span-2">
+        <div id="mapaPlanificador" class="h-[360px] w-full rounded-lg overflow-hidden z-0"></div>
+        <p class="text-xs text-slate-500 mt-1">Mapa de {{ placaMapa }}: los números son el orden de entrega desde la base.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal señalizar en mapa -->
+<div *ngIf="modalAbierto" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" (click)="cerrarModal()">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-lg" (click)="$event.stopPropagation()">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h4 class="font-bold text-slate-800"><i class="fas fa-map-pin mr-2 text-[#1565C0]"></i>Señalizar ubicación</h4>
+      <button (click)="cerrarModal()" class="text-slate-500 hover:text-slate-700"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-4 space-y-3">
+      <p class="text-sm text-slate-600">
+        <b>{{ modalPedido?.cliente }}</b> · Ped: {{ modalPedido?.pedido || 'SIN N°' }}<br>
+        {{ modalPedido?.direccion }} — {{ modalPedido?.distrito }}
+      </p>
+      <div *ngIf="(modalPedido?.estado === 'multiple' || modalPedido?.distritoOk === false) && (modalPedido?.candidatos?.length ?? 0) > 0" class="flex flex-wrap gap-1">
+        <button *ngFor="let c of modalPedido!.candidatos; let i = index"
+          (click)="seleccionarCandidatoModal(c)"
+          [title]="c.direccion"
+          class="px-2 py-1 text-xs rounded-lg border transition font-medium"
+          [class.bg-[#1565C0]]="esCandidatoModalSeleccionado(c)"
+          [class.text-white]="esCandidatoModalSeleccionado(c)"
+          [class.bg-white]="!esCandidatoModalSeleccionado(c)"
+          [class.text-[#1565C0]]="!esCandidatoModalSeleccionado(c)"
+          [class.border-[#1565C0]/40]="!esCandidatoModalSeleccionado(c)">
+          Opción {{ i + 1 }}: {{ c.lat.toFixed(5) }}, {{ c.lng.toFixed(5) }}
+        </button>
+      </div>
+      <div id="mapaModal" class="h-[300px] w-full rounded-lg overflow-hidden z-0"></div>
+      <p class="text-xs text-slate-500">
+        <ng-container *ngIf="modalPedido?.estado === 'multiple'">Elija una de las {{ (modalPedido?.candidatos?.length || 1) }} coincidencias (marcadores numerados) o haga clic en el mapa para colocar el punto manualmente.</ng-container>
+        <ng-container *ngIf="modalPedido?.estado !== 'multiple' && modalPedido?.distritoOk === false">Confirme la ubicación encontrada (Opción 1) o haga clic en el mapa para colocar otra manualmente.</ng-container>
+        <ng-container *ngIf="modalPedido?.estado !== 'multiple' && modalPedido?.distritoOk !== false">Haga clic en el mapa para colocar el punto manualmente.</ng-container>
+        <span *ngIf="modalLat !== null"> · Coords: {{ modalLat.toFixed(6) }}, {{ modalLng?.toFixed(6) }}</span>
+      </p>
+      <div class="flex gap-2">
+        <button (click)="guardarSenalizacion()" [disabled]="modalLat === null" class="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg transition disabled:opacity-40">
+          <i class="fas fa-check mr-1"></i> Guardar ubicación
+        </button>
+        <button (click)="cerrarModal()" class="px-4 py-2 text-sm font-semibold text-slate-600 border border-[#E0E0E0] rounded-lg">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal registrar producto -->
+<div *ngIf="modalCodigoAbierto" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" (click)="cerrarModalCodigo()">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md" (click)="$event.stopPropagation()">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h4 class="font-bold text-slate-800"><i class="fas fa-box mr-2 text-[#2E7D32]"></i>Registrar producto</h4>
+      <button (click)="cerrarModalCodigo()" class="text-slate-500 hover:text-slate-700"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-4 space-y-3">
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Código del producto (p.ej. 152035)</label>
+        <input type="text" [(ngModel)]="nuevoCodigo" class="w-full px-3 py-2 rounded-lg border border-[#E0E0E0] text-sm focus:outline-none focus:border-[#2E7D32]">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Unidades que trae el combo</label>
+        <input type="number" min="1" [(ngModel)]="nuevoCodigoUnidades" class="w-full px-3 py-2 rounded-lg border border-[#E0E0E0] text-sm focus:outline-none focus:border-[#2E7D32]">
+      </div>
+      <button (click)="guardarCodigo()" class="w-full px-4 py-2 text-sm font-semibold text-white bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg transition">
+        <i class="fas fa-check mr-1"></i> Guardar producto
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal agregar vehículo -->
+<div *ngIf="modalVehiculoAbierto" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" (click)="cerrarModalVehiculo()">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md" (click)="$event.stopPropagation()">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h4 class="font-bold text-slate-800"><i class="fas fa-truck mr-2 text-[#1565C0]"></i>Agregar vehículo</h4>
+      <button (click)="cerrarModalVehiculo()" class="text-slate-500 hover:text-slate-700"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-4 space-y-3">
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Placa</label>
+        <input type="text" [(ngModel)]="nuevaPlaca" class="w-full px-3 py-2 rounded-lg border border-[#E0E0E0] text-sm focus:outline-none focus:border-[#1565C0] uppercase">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Capacidad (unidades)</label>
+        <input type="number" min="1" [(ngModel)]="nuevaCapacidad" class="w-full px-3 py-2 rounded-lg border border-[#E0E0E0] text-sm focus:outline-none focus:border-[#1565C0]">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Zonas permitidas (ninguna = todas)</label>
+        <div class="flex flex-wrap gap-1.5">
+          <label *ngFor="let z of zonasDisponibles"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border cursor-pointer text-xs font-medium transition"
+            [class.bg-sky-50]="nuevasZonas[z]"
+            [class.border-[#1565C0]]="nuevasZonas[z]"
+            [class.text-[#1565C0]]="nuevasZonas[z]"
+            [class.border-[#E0E0E0]]="!nuevasZonas[z]"
+            [class.text-slate-600]="!nuevasZonas[z]">
+            <input type="checkbox" [(ngModel)]="nuevasZonas[z]" class="accent-[#1565C0]">
+            {{ z }}
+          </label>
+        </div>
+      </div>
+      <button (click)="guardarVehiculo()" class="w-full px-4 py-2 text-sm font-semibold text-white bg-[#1565C0] hover:bg-[#0D47A1] rounded-lg transition">
+        <i class="fas fa-check mr-1"></i> Guardar vehículo
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal códigos sin composición -->
+<div *ngIf="modalCodigosAbierto" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" (click)="cerrarModalCodigosPendientes()">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md" (click)="$event.stopPropagation()">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h4 class="font-bold text-slate-800"><i class="fas fa-box mr-2 text-[#B25E00]"></i>Códigos sin composición</h4>
+      <button (click)="cerrarModalCodigosPendientes()" class="text-slate-500 hover:text-slate-700"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-4 space-y-2 max-h-[360px] overflow-auto">
+      <p class="text-xs text-slate-500">Asigna las unidades que trae cada combo y guárdalos en la hoja 'composicion'.</p>
+      <div *ngFor="let c of codigosPendientes" class="flex items-center gap-2 rounded-lg border border-[#E0E0E0] p-2">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-semibold text-slate-700">{{ c.codigo }}</div>
+          <div class="text-[11px] text-slate-500">Pedido: {{ c.cantidad }} ud(s)</div>
+        </div>
+        <div class="w-24">
+          <input type="number" min="1" [(ngModel)]="c.unidades" class="w-full px-2 py-1.5 rounded-lg border border-[#E0E0E0] text-sm text-center focus:outline-none focus:border-[#B25E00]">
+        </div>
+      </div>
+      <div *ngIf="codigosPendientes.length === 0" class="text-center text-sm text-slate-400 py-4">Sin pendientes.</div>
+    </div>
+    <div class="px-4 py-3 border-t flex gap-2">
+      <button (click)="guardarCodigosPendientes()" class="flex-1 px-4 py-2 text-sm font-semibold text-white bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg transition">
+        <i class="fas fa-check mr-1"></i> Guardar ({{ codigosPendientes.length }})
+      </button>
+      <button (click)="cerrarModalCodigosPendientes()" class="px-4 py-2 text-sm font-semibold text-slate-600 border border-[#E0E0E0] rounded-lg">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal ruta por placa -->
+<div *ngIf="modalRutaAbierto" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" (click)="cerrarModalRuta()">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col" (click)="$event.stopPropagation()">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h4 class="font-bold text-slate-800"><i class="fas fa-truck mr-2 text-[#1565C0]"></i>Ruta de {{ modalRutaPlaca }}</h4>
+      <div class="flex items-center gap-2">
+        <button (click)="invertirRuta()" class="px-3 py-1.5 text-xs font-semibold text-[#1565C0] hover:bg-sky-50 rounded-lg transition border border-[#1565C0]/40 bg-white">
+          <i class="fas fa-arrows-rotate mr-1"></i> Invertir ruta
+        </button>
+        <button (click)="cerrarModalRuta()" class="text-slate-500 hover:text-slate-700"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-auto">
+      <div class="space-y-1.5 max-h-[60vh] overflow-auto">
+        <div *ngFor="let p of vehiculoDeResultado(modalRutaPlaca)?.pedidos" class="rounded-lg border border-[#E0E0E0] p-2 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 flex items-center justify-center rounded-full bg-[#1565C0] text-white text-[10px] font-bold">{{ p.orden }}</span>
+            <span class="font-semibold text-slate-700">{{ p.cliente }}</span>
+            <span class="f-data text-[#BA1A1A] ml-auto">Ped: {{ p.pedido }}</span>
+          </div>
+          <div class="text-slate-600 mt-1">{{ p.direccion }}</div>
+          <div *ngIf="p.referencia" class="text-slate-500"><i class="fas fa-map-pin mr-1"></i>{{ p.referencia }}</div>
+          <div class="text-slate-500">{{ p.distrito }}</div>
+          <div *ngIf="p.observaciones" class="text-slate-500"><i class="fas fa-sticky-note mr-1"></i>{{ p.observaciones }}</div>
+        </div>
+        <div *ngIf="vehiculoDeResultado(modalRutaPlaca)?.pedidos?.length === 0" class="text-center text-sm text-slate-400 py-6">Sin pedidos.</div>
+      </div>
+      <div id="mapaRutaPlaca" class="h-[400px] w-full rounded-lg overflow-hidden z-0"></div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,47 @@
+:host ::ng-deep .leaflet-container {
+  z-index: 0;
+}
+
+:host ::ng-deep .punto-mapa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  font-family: inherit;
+  width: 24px;
+  height: 24px;
+}
+
+:host ::ng-deep .punto-mapa--base {
+  background: #2e7d32;
+  font-size: 14px;
+  width: 30px;
+  height: 30px;
+}
+
+:host ::ng-deep .punto-mapa--candidato {
+  background: #1565c0;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+}
+
+:host ::ng-deep .punto-mapa--candidato-sel {
+  background: #f57c00;
+  border: 2px solid #fff;
+  transform: scale(1.15);
+}
+
+:host ::ng-deep .punto-mapa--modal {
+  background: #d32f2f;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+  width: 30px;
+  height: 30px;
+}

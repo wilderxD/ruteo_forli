@@ -15,6 +15,9 @@
         </button>
       </ng-container>
       <ng-container *ngIf="sesion.rol === 'admin'">
+        <button (click)="ir('/planificador')" class="px-3 py-1.5 text-sm font-semibold text-[#7BD1F8] hover:bg-[#263238] rounded-lg transition border border-[#005F7B]/40 btn-ghost">
+          <i class="fas fa-route mr-1"></i> Planificador
+        </button>
         <button (click)="ir('/admin')" class="px-3 py-1.5 text-sm font-semibold text-[#F57C00] hover:bg-[#263238] rounded-lg transition border border-[#F57C00]/40 btn-ghost">
           <i class="fas fa-chart-line mr-1"></i> Admin
         </button>

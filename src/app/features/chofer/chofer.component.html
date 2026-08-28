@@ -102,6 +102,19 @@
       <div class="flex-1 min-w-0">
         <div class="text-sm font-medium text-slate-700 truncate">{{ r.cliente }} <span class="text-xs text-[#BA1A1A] f-data">Ped: {{ r.pedido }}</span></div>
         <div class="text-xs text-slate-500 truncate">{{ r.direccion }} — {{ r.distrito }}</div>
+        <div *ngIf="candidatosDe(r).length > 1" class="flex flex-wrap gap-1 mt-1">
+          <button *ngFor="let c of candidatosDe(r); let i = index"
+            (click)="elegirCandidato(r, c)"
+            [title]="c.direccion"
+            class="px-2 py-1 text-xs rounded-lg border transition font-medium"
+            [class.bg-[#2E7D32]]="esCandidatoElegido(r, c)"
+            [class.text-white]="esCandidatoElegido(r, c)"
+            [class.bg-white]="!esCandidatoElegido(r, c)"
+            [class.text-[#2E7D32]]="!esCandidatoElegido(r, c)"
+            [class.border-[#2E7D32]/40]="!esCandidatoElegido(r, c)">
+            Opción {{ i + 1 }} <span class="opacity-70">{{ c.lat.toFixed(5) }}, {{ c.lng.toFixed(5) }}</span>
+          </button>
+        </div>
       </div>
       <div class="flex items-center gap-2">
         <span *ngIf="ubicadaManual(r)" class="text-xs text-[#2E7D32]"><i class="fas fa-check mr-1"></i>Ubicada</span>

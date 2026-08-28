@@ -24,6 +24,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin/admin.component').then(m => m.AdminComponent)
       },
       {
+        path: 'planificador',
+        canActivate: [rolGuard(['admin'])],
+        loadComponent: () => import('./features/planificador/planificador.component').then(m => m.PlanificadorComponent)
+      },
+      {
         path: 'soporte',
         canActivate: [rolGuard(['soporte', 'admin'])],
         loadComponent: () => import('./features/soporte/soporte.component').then(m => m.SoporteComponent)
