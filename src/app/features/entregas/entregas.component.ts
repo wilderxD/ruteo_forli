@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
@@ -24,7 +24,8 @@ export class EntregasComponent implements OnInit {
   constructor(
     private api: ApiService,
     private sesion: SesionService,
-    private swal: SwalService
+    private swal: SwalService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   get token(): string {
@@ -32,14 +33,14 @@ export class EntregasComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    await this.cargarPlacas();
-    await this.cargar();
+    await Promise.all([this.cargarPlacas(), this.cargar()]);
   }
 
   async cargarPlacas(): Promise<void> {
     try {
       const res = await this.api.get('datos_asignacion', {}, this.token);
       if (res.success) this.placas = (res.placas as string[]) || [];
+      this.cdr.detectChanges();
     } catch { /* silencioso */ }
   }
 
@@ -51,7 +52,10 @@ export class EntregasComponent implements OnInit {
         desde: this.fechaDesde,
         hasta: this.fechaHasta
       }, this.token);
-      if (res.success) this.registros = (res.registros as RegistroEntrega[]) || [];
+      if (res.success) {
+        this.registros = (res.registros as RegistroEntrega[]) || [];
+        this.cdr.detectChanges();
+      }
       else this.swal.error((res.msg as string) || 'Error al cargar entregas.');
     } catch {
       this.swal.error('Sin conexión.');

@@ -9,6 +9,11 @@ import { environment } from '../../../environments/environment';
  *  - POST se envía con Content-Type: text/plain (request simple que evita
  *    el preflight). El backend lee e.postData.contents y parsea el JSON.
  * El redirect 302 de Apps Script lo sigue el navegador automáticamente.
+ *
+ * El render posterior a cada llamada lo garantizan los componentes con
+ * cdr.detectChanges() tras asignar sus datos (patrón del proyecto). No se
+ * usa appRef.tick() global aquí: un tick global puede lanzar errores cuando
+ * hay vistas destruidas/inconsistentes.
  */
 @Injectable({ providedIn: 'root' })
 export class ApiService {

@@ -113,6 +113,7 @@ export interface EstadoPlanificacion {
   hojaLista: boolean;
   total: number;
   sinCoords: number;
+  sinCoordsDetalle?: { pedido: string; cliente: string; filas: number[] }[];
   porDistrito: Record<string, number>;
   placas: string[];
   vehiculos?: VehiculoConfig[];
@@ -147,7 +148,22 @@ export interface AsignacionVehiculo {
   zonas: string[];
   km: number;
   distritos: string[];
+  bajaCarga?: boolean;
   pedidos: PedidoAsignado[];
+}
+
+export interface NoAsignado {
+  pedido: string;
+  cliente: string;
+  unidades: number;
+  motivo: string;
+  distrito?: string;
+  distritoRaw?: string;
+  zona?: string;
+  direccion?: string;
+  referencia?: string;
+  observaciones?: string;
+  filas?: number[];
 }
 
 export interface ResultadoDistribucion {
@@ -156,7 +172,9 @@ export interface ResultadoDistribucion {
   kmTotal: number;
   distribuidos: number;
   sinUbicar: number;
-  noAsignados?: { pedido: string; cliente: string; unidades: number; motivo: string }[];
+  sinUbicarDetalle?: { pedido: string; cliente: string }[];
+  autoSeleccion?: string[];
+  noAsignados?: NoAsignado[];
   advertencias?: { codigo: string; cantidad: number }[];
   base: { lat: number; lng: number };
 }

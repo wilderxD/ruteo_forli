@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -26,7 +26,8 @@ export class AdminComponent implements OnInit {
     private sesion: SesionService,
     private swal: SwalService,
     private excel: ExcelService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -44,6 +45,11 @@ export class AdminComponent implements OnInit {
     return fuente ? Object.entries(fuente) : [];
   }
 
+  alternarVista(e: Event): void {
+    this.esManana = (e.target as HTMLInputElement).checked;
+    this.cdr.detectChanges();
+  }
+
   verRuta(placa: string): void {
     this.sesion.setPlaca(placa);
     this.router.navigate(['/chofer', placa]);
@@ -54,6 +60,7 @@ export class AdminComponent implements OnInit {
     try {
       const res = await this.api.get('estado_admin', {}, this.token);
       if (res.success) this.estado = res as unknown as EstadoAdmin;
+      this.cdr.detectChanges();
     } catch {
       this.swal.error('Error al cargar el panel.');
     } finally {
@@ -65,6 +72,7 @@ export class AdminComponent implements OnInit {
     try {
       const res = await this.api.get('datos_asignacion', {}, this.token);
       if (res.success) this.datosAsignacion = res as unknown as DatosAsignacion;
+      this.cdr.detectChanges();
     } catch {
       /* silencioso */
     }

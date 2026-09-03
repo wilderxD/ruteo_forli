@@ -7,7 +7,7 @@ import Swal from 'sweetalert2';
 import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
-import { EstadoPlanificacion, ResultadoDistribucion, DetalleGeo, CandidatoGeo, VehiculoConfig, AsignacionVehiculo } from '../../core/models';
+import { EstadoPlanificacion, ResultadoDistribucion, DetalleGeo, CandidatoGeo, VehiculoConfig, AsignacionVehiculo, NoAsignado, PedidoAsignado } from '../../core/models';
 
 @Component({
   selector: 'app-planificador',
@@ -25,7 +25,9 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   geocodificando = false;
   geoProgreso = 0;
   geoTotal = 0;
-  asignando = false;
+asignando = false;
+  combinando = false;
+  autoVehiculos = true;
   detallesGeo: DetalleGeo[] = [];
   filtroGeo: 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' = 'todas';
   modalAbierto = false;
@@ -46,6 +48,10 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   codigosPendientes: { codigo: string; cantidad: number; unidades: number }[] = [];
   modalRutaAbierto = false;
   modalRutaPlaca = '';
+  modalAsignarAbierto = false;
+  pedidoAsignar: NoAsignado | null = null;
+  placaAsignar = '';
+  pedidoRutaRef: PedidoAsignado | null = null;
 
   private map?: L.Map;
   private capas?: L.LayerGroup;
@@ -94,6 +100,10 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
 
   get placasSeleccionadas(): string[] {
     return this.placasDisponibles.filter(p => this.seleccionPlacas[p]);
+  }
+
+  get sinCoordsNums(): string {
+    return (this.estado?.sinCoordsDetalle || []).map(x => x.pedido).join(', ');
   }
 
   capacidadDe(placa: string): number {
@@ -200,6 +210,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
     this.modalCodigoAbierto = true;
     this.nuevoCodigo = '';
     this.nuevoCodigoUnidades = 1;
+    this.cdr.detectChanges();
   }
 
   cerrarModalCodigo(): void {
@@ -237,6 +248,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
     this.nuevaCapacidad = v ? v.capacidad : 30;
     this.nuevasZonas = {};
     this.zonasDisponibles.forEach(z => this.nuevasZonas[z] = v ? v.zonas.includes(z) : false);
+    this.cdr.detectChanges();
   }
 
   cerrarModalVehiculo(): void {
@@ -279,6 +291,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
       return;
     }
     this.modalCodigosAbierto = true;
+    this.cdr.detectChanges();
   }
 
   cerrarModalCodigosPendientes(): void {
@@ -609,6 +622,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   }
 
   abrirModalSenalizar(d: DetalleGeo): void {
+    this.pedidoRutaRef = null;
     this.modalPedido = d;
     this.modalLat = d.lat && d.lng ? parseFloat(d.lat) : null;
     this.modalLng = d.lat && d.lng ? parseFloat(d.lng) : null;
@@ -617,6 +631,25 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
     this.modalAbierto = true;
     this.cdr.detectChanges();
     setTimeout(() => this.inicializarMapaModal(), 0);
+  }
+
+  abrirModalSenalizarRuta(p: PedidoAsignado): void {
+    const d: DetalleGeo = {
+      pedido: p.pedido,
+      filas: p.filas || [],
+      cliente: p.cliente,
+      direccion: p.direccion,
+      referencia: p.referencia,
+      distrito: p.distrito,
+      lat: p.lat,
+      lng: p.lng,
+      estado: 'ubicada',
+      candidatos: [],
+      queryUsado: '',
+      distritoOk: true
+    };
+    this.pedidoRutaRef = p;
+    this.abrirModalSenalizar(d);
   }
 
   esCandidatoModalSeleccionado(c: CandidatoGeo): boolean {
@@ -759,8 +792,17 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
         d.lng = String(this.modalLng);
         d.estado = 'ubicada';
         d.candidatos = [];
+        if (this.pedidoRutaRef) {
+          this.pedidoRutaRef.lat = String(this.modalLat);
+          this.pedidoRutaRef.lng = String(this.modalLng);
+        }
         this.cerrarModal();
-        this.swal.exito('Ubicación guardada.');
+        if (this.pedidoRutaRef && this.modalRutaAbierto) {
+          this.renderizarMapaRuta();
+          this.swal.exito('Ubicación actualizada en la ruta. Re-optimiza para recalcular km/orden.');
+        } else {
+          this.swal.exito('Ubicación guardada.');
+        }
         await this.cargarEstado();
       } else {
         this.swal.error(this.msgApi(res, 'No se pudo guardar.'));
@@ -773,26 +815,33 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
 
   async distribuir(): Promise<void> {
     const placas = this.placasSeleccionadas;
-    if (placas.length === 0) {
-      this.swal.aviso('Selecciona al menos un vehículo.', 'warning');
+    if (!this.autoVehiculos && placas.length === 0) {
+      this.swal.aviso('Selecciona al menos un vehículo o activa "Auto (según necesidad)".', 'warning');
       return;
     }
     if (this.asignando) return;
     this.asignando = true;
     this.swal.cargando(true, 'Optimizando distribución por distancia total...');
     try {
-      const res = await this.api.post('planificar_distribuir', { vehiculos: placas }, this.sesion.token);
+      const res = await this.api.post('planificar_distribuir', { vehiculos: this.autoVehiculos ? [] : placas }, this.sesion.token);
       this.swal.cargando(false);
       this.asignando = false;
       if (res?.success) {
         this.resultado = res as ResultadoDistribucion;
         this.placaMapa = res.vehiculos?.[0]?.placa || '';
+        if (this.autoVehiculos && Array.isArray(res.autoSeleccion)) {
+          res.autoSeleccion.forEach((p: string) => this.seleccionPlacas[p] = true);
+        }
         const sin = res.sinUbicar || 0;
+        const sinDetalle = Array.isArray(res.sinUbicarDetalle) ? res.sinUbicarDetalle : [];
         const sinPlaca = (res.noAsignados || []).length;
         const faltantes = (res.advertencias || []).length;
         const partes: string[] = [];
         partes.push('Distribución lista: ' + res.distribuidos + ' pedidos en ' + res.vehiculos.length + ' vehículos, ' + res.kmTotal + ' km.');
-        if (sin > 0) partes.push(sin + ' sin ubicar (sin placa).');
+        if (sin > 0) {
+          const nums = sinDetalle.slice(0, 10).map((x: { pedido: string }) => x.pedido).join(', ');
+          partes.push(sin + ' sin ubicar (sin placa): ' + (nums || 'ver tabla.'));
+        }
         if (sinPlaca > 0) partes.push(sinPlaca + ' sin placa por capacidad/zona (revisa abajo).');
         if (faltantes > 0) partes.push(faltantes + ' código(s) sin composición (cuentan 1 ud).');
         await this.swal.aviso(partes.join('\n'), sinPlaca > 0 || faltantes > 0 ? 'warning' : 'info');
@@ -839,9 +888,109 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
     }
   }
 
+  abrirModalAsignar(n: NoAsignado): void {
+    this.pedidoAsignar = n;
+    this.placaAsignar = this.resultado?.vehiculos?.[0]?.placa || '';
+    this.modalAsignarAbierto = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarModalAsignar(): void {
+    this.modalAsignarAbierto = false;
+    this.pedidoAsignar = null;
+    this.placaAsignar = '';
+    this.cdr.detectChanges();
+  }
+
+  restantePlaca(placa: string): number {
+    const v = this.resultado?.vehiculos.find(x => x.placa === placa);
+    return v ? v.capacidad - v.unidades : 0;
+  }
+
+  async asignarPedidoManual(): Promise<void> {
+    const n = this.pedidoAsignar;
+    if (!n || !this.resultado) return;
+    const placa = this.placaAsignar.trim().toUpperCase();
+    const v = this.resultado.vehiculos.find(x => x.placa === placa);
+    if (!v) {
+      this.swal.error('Selecciona una placa.');
+      return;
+    }
+    const excede = n.unidades > (v.capacidad - v.unidades);
+    if (excede) {
+      const ok = await this.swal.confirmar(
+        'Excede la capacidad',
+        'La placa ' + placa + ' tiene ' + (v.capacidad - v.unidades) + ' uds libres y el pedido requiere ' + n.unidades + ' uds. ¿Asignar igualmente?',
+        'warning',
+        'Sí, asignar'
+      );
+      if (!ok) return;
+    }
+    const nuevo: PedidoAsignado = {
+      pedido: n.pedido,
+      filas: n.filas || [],
+      cliente: n.cliente,
+      distrito: n.distrito || '',
+      direccion: n.direccion || '',
+      referencia: n.referencia || '',
+      observaciones: n.observaciones || '',
+      lat: '',
+      lng: '',
+      orden: v.pedidos.length + 1,
+      unidades: n.unidades
+    };
+    v.pedidos.push(nuevo);
+    v.unidades += n.unidades;
+    if (n.distrito && !v.distritos.includes(n.distrito)) v.distritos.push(n.distrito);
+    this.resultado.noAsignados = (this.resultado.noAsignados || []).filter(x => x.pedido !== n.pedido);
+    this.resultado.distribuidos += 1;
+    this.cerrarModalAsignar();
+    this.swal.exito('Pedido ' + n.pedido + ' asignado a ' + placa + '.');
+    this.cdr.detectChanges();
+  }
+
   cambiarPlacaMapa(): void {
     this.cdr.detectChanges();
     this.renderizarMapa();
+  }
+
+  get vehiculosBajaCarga(): AsignacionVehiculo[] {
+    return (this.resultado?.vehiculos || []).filter(v => v.unidades > 0 && v.capacidad > 0 && v.unidades / v.capacidad < 0.5);
+  }
+
+  combinarDestino(origen: string): string {
+    const opciones = this.vehiculosBajaCarga.filter(v => v.placa !== origen);
+    return opciones[0]?.placa || '';
+  }
+
+  async combinarVehiculos(origen: string, destino: string): Promise<void> {
+    if (!this.resultado || this.combinando) return;
+    if (!destino) { this.swal.error('No hay otro vehículo de baja carga para combinar.'); return; }
+    this.combinando = true;
+    this.swal.cargando(true, 'Combinando ' + origen + ' → ' + destino + '...');
+    try {
+      const res = await this.api.post('planificar_combinar', {
+        vehiculos: this.resultado.vehiculos,
+        origen,
+        destino
+      }, this.sesion.token);
+      this.swal.cargando(false);
+      this.combinando = false;
+      if (res?.success) {
+        this.resultado.vehiculos = (res.vehiculos || []) as AsignacionVehiculo[];
+        this.resultado.kmTotal = res.kmTotal ?? this.resultado.kmTotal;
+        if (this.placaMapa === origen) this.placaMapa = destino;
+        this.cdr.detectChanges();
+        this.programarMapa();
+        this.swal.exito('Combinado. ' + origen + ' quedó como vehículo vacío.');
+      } else {
+        this.swal.error(this.msgApi(res, 'No se pudo combinar.'));
+      }
+    } catch {
+      this.swal.cargando(false);
+      this.combinando = false;
+      this.swal.error('Sin conexión. No se pudo combinar.');
+    }
   }
 
   private programarMapa(): void {

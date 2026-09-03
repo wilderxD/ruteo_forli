@@ -5,7 +5,7 @@
       <div class="flex items-center gap-3">
         <span [class]="esManana ? 'text-sm font-medium text-slate-400' : 'text-sm font-medium text-[#D32F2F]'">HOY</span>
         <label class="switch">
-          <input type="checkbox" [(ngModel)]="esManana">
+          <input type="checkbox" [checked]="esManana" (change)="alternarVista($event)">
           <span class="slider"></span>
         </label>
         <span [class]="esManana ? 'text-sm font-medium text-[#D32F2F]' : 'text-sm font-medium text-slate-400'">PRÓX. ENTREGA</span>

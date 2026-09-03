@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
@@ -33,7 +33,8 @@ export class SoporteComponent implements OnInit {
     private api: ApiService,
     private sesion: SesionService,
     private swal: SwalService,
-    private excel: ExcelService
+    private excel: ExcelService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   get token(): string {
@@ -67,6 +68,7 @@ export class SoporteComponent implements OnInit {
       if (res.success) {
         this.datos = res as unknown as DatosSoporte;
         this.registros = this.datos.registros;
+        this.cdr.detectChanges();
       } else {
         this.swal.error(this.datos?.msg ?? 'Error al cargar soporte.');
       }
