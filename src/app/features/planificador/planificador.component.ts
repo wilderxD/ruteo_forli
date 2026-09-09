@@ -27,6 +27,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   geoTotal = 0;
 asignando = false;
   combinando = false;
+  destinoSeleccion: Record<string, string> = {};
   autoVehiculos = true;
   detallesGeo: DetalleGeo[] = [];
   filtroGeo: 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' = 'todas';
@@ -63,6 +64,8 @@ asignando = false;
   private modalRutaMapa?: L.Map;
   private modalRutaCapas?: L.LayerGroup;
   private colores = ['#D32F2F', '#1565C0', '#2E7D32', '#F57C00', '#7B1FA2', '#00695C', '#5D4037', '#C2185B', '#00838F', '#9E9D24'];
+  private static readonly BASE_LAT = -11.8582642;
+  private static readonly BASE_LNG = -77.0642993;
 
   constructor(
     private api: ApiService,
@@ -380,8 +383,8 @@ asignando = false;
 
     const v = this.vehiculoDeResultado(this.modalRutaPlaca);
     if (!v) return;
-    const baseLat = this.resultado?.base?.lat || -11.8582642;
-    const baseLng = this.resultado?.base?.lng || -77.0642993;
+    const baseLat = this.resultado?.base?.lat || PlanificadorComponent.BASE_LAT;
+    const baseLng = this.resultado?.base?.lng || PlanificadorComponent.BASE_LNG;
     const color = this.colores[0];
 
     const baseIcon = L.divIcon({
@@ -717,7 +720,7 @@ asignando = false;
 
       const center: [number, number] = this.modalLat !== null && this.modalLng !== null
         ? [this.modalLat, this.modalLng]
-        : [-11.8582642, -77.0642993];
+        : [PlanificadorComponent.BASE_LAT, PlanificadorComponent.BASE_LNG];
       this.modalMap.setView(center, 15);
 
       this.modalMap.on('click', (ev: L.LeafletMouseEvent) => {
@@ -829,6 +832,7 @@ asignando = false;
       if (res?.success) {
         this.resultado = res as ResultadoDistribucion;
         this.placaMapa = res.vehiculos?.[0]?.placa || '';
+        this.sincronizarDestinosBajaCarga();
         if (this.autoVehiculos && Array.isArray(res.autoSeleccion)) {
           res.autoSeleccion.forEach((p: string) => this.seleccionPlacas[p] = true);
         }
@@ -840,7 +844,7 @@ asignando = false;
         partes.push('Distribución lista: ' + res.distribuidos + ' pedidos en ' + res.vehiculos.length + ' vehículos, ' + res.kmTotal + ' km.');
         if (sin > 0) {
           const nums = sinDetalle.slice(0, 10).map((x: { pedido: string }) => x.pedido).join(', ');
-          partes.push(sin + ' sin ubicar (sin placa): ' + (nums || 'ver tabla.'));
+          partes.push(sin + ' sin ubicar (sin coordenadas): ' + (nums || 'ver tabla.'));
         }
         if (sinPlaca > 0) partes.push(sinPlaca + ' sin placa por capacidad/zona (revisa abajo).');
         if (faltantes > 0) partes.push(faltantes + ' código(s) sin composición (cuentan 1 ud).');
@@ -941,12 +945,15 @@ asignando = false;
     };
     v.pedidos.push(nuevo);
     v.unidades += n.unidades;
+    v.bajaCarga = v.capacidad > 0 && v.unidades / v.capacidad < 0.5;
     if (n.distrito && !v.distritos.includes(n.distrito)) v.distritos.push(n.distrito);
     this.resultado.noAsignados = (this.resultado.noAsignados || []).filter(x => x.pedido !== n.pedido);
     this.resultado.distribuidos += 1;
+    this.sincronizarDestinosBajaCarga();
     this.cerrarModalAsignar();
-    this.swal.exito('Pedido ' + n.pedido + ' asignado a ' + placa + '.');
+    this.swal.exito('Pedido ' + n.pedido + ' asignado a ' + placa + '. Nota: al no tener coordenadas no se muestra en el mapa.');
     this.cdr.detectChanges();
+    this.programarMapa();
   }
 
   cambiarPlacaMapa(): void {
@@ -958,14 +965,33 @@ asignando = false;
     return (this.resultado?.vehiculos || []).filter(v => v.unidades > 0 && v.capacidad > 0 && v.unidades / v.capacidad < 0.5);
   }
 
-  combinarDestino(origen: string): string {
-    const opciones = this.vehiculosBajaCarga.filter(v => v.placa !== origen);
-    return opciones[0]?.placa || '';
+  unidadesDePlaca(placa: string): number {
+    const v = this.resultado?.vehiculos.find(x => x.placa === placa);
+    return v ? v.unidades : 0;
+  }
+
+  private sincronizarDestinosBajaCarga(): void {
+    const nuevos: Record<string, string> = {};
+    this.vehiculosBajaCarga.forEach(v => {
+      const opciones = this.destinosPosibles(v.placa);
+      if (!opciones.length) return;
+      const actual = this.destinoSeleccion[v.placa];
+      nuevos[v.placa] = (actual && opciones.some(o => o.placa === actual)) ? actual : opciones[0].placa;
+    });
+    this.destinoSeleccion = nuevos;
+  }
+
+  destinosPosibles(origen: string): AsignacionVehiculo[] {
+    const udsOrigen = this.unidadesDePlaca(origen);
+    return this.vehiculosBajaCarga.filter(v =>
+      v.placa !== origen &&
+      v.unidades + udsOrigen <= v.capacidad
+    );
   }
 
   async combinarVehiculos(origen: string, destino: string): Promise<void> {
     if (!this.resultado || this.combinando) return;
-    if (!destino) { this.swal.error('No hay otro vehículo de baja carga para combinar.'); return; }
+    if (!destino) { this.swal.error('No hay otro vehículo de baja carga con espacio para combinar.'); return; }
     this.combinando = true;
     this.swal.cargando(true, 'Combinando ' + origen + ' → ' + destino + '...');
     try {
@@ -980,6 +1006,7 @@ asignando = false;
         this.resultado.vehiculos = (res.vehiculos || []) as AsignacionVehiculo[];
         this.resultado.kmTotal = res.kmTotal ?? this.resultado.kmTotal;
         if (this.placaMapa === origen) this.placaMapa = destino;
+        this.sincronizarDestinosBajaCarga();
         this.cdr.detectChanges();
         this.programarMapa();
         this.swal.exito('Combinado. ' + origen + ' quedó como vehículo vacío.');
@@ -1043,8 +1070,8 @@ asignando = false;
     const capas = this.capas;
     capas.clearLayers();
 
-    const baseLat = this.resultado.base?.lat || -11.8582642;
-    const baseLng = this.resultado.base?.lng || -77.0642993;
+    const baseLat = this.resultado.base?.lat || PlanificadorComponent.BASE_LAT;
+    const baseLng = this.resultado.base?.lng || PlanificadorComponent.BASE_LNG;
 
     const baseIcon = L.divIcon({
       className: 'punto-mapa punto-mapa--base',

@@ -22,7 +22,7 @@ export class SesionService {
 
   private cargar(): void {
     try {
-      const raw = localStorage.getItem(CLAVE);
+      const raw = sessionStorage.getItem(CLAVE);
       if (raw) this.sesion = JSON.parse(raw);
     } catch {
       this.sesion = null;
@@ -31,13 +31,13 @@ export class SesionService {
 
   guardar(s: Sesion): void {
     this.sesion = s;
-    localStorage.setItem(CLAVE, JSON.stringify(s));
+    sessionStorage.setItem(CLAVE, JSON.stringify(s));
   }
 
   actualizar(parcial: Partial<Sesion>): void {
     if (!this.sesion) return;
     this.sesion = { ...this.sesion, ...parcial };
-    localStorage.setItem(CLAVE, JSON.stringify(this.sesion));
+    sessionStorage.setItem(CLAVE, JSON.stringify(this.sesion));
   }
 
   obtener(): Sesion | null {
@@ -70,6 +70,6 @@ export class SesionService {
 
   limpiar(): void {
     this.sesion = null;
-    localStorage.removeItem(CLAVE);
+    sessionStorage.removeItem(CLAVE);
   }
 }

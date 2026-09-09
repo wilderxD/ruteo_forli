@@ -5,8 +5,9 @@
     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
       <h3 class="font-bold text-slate-800 f-display tracking-wide"><i class="fas fa-route mr-2 text-[#D32F2F]"></i>Planificador de Flota</h3>
       <span *ngIf="backendVersion" class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Backend v: {{ backendVersion }}</span>
-      <button (click)="cargarEstado()" class="text-sm text-[#5B403D] hover:text-[#D32F2F] transition font-medium btn-ghost">
-        <i class="fas fa-sync-alt mr-1"></i> Refrescar
+      <button (click)="cargarEstado()" [disabled]="cargando"
+        class="text-sm text-[#5B403D] hover:text-[#D32F2F] transition font-medium btn-ghost disabled:opacity-40 disabled:cursor-not-allowed">
+        <i class="fas fa-sync-alt mr-1" [class.fa-spin]="cargando"></i> {{ cargando ? 'Cargando...' : 'Refrescar' }}
       </button>
     </div>
 
@@ -237,18 +238,20 @@
               <span class="text-[10px] text-slate-500">{{ v.unidades }}/{{ v.capacidad }} uds · {{ v.zonas.join('·') }}</span>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-              <select [ngModel]="combinarDestino(v.placa)" #sel
+              <select [ngModel]="destinoSeleccion[v.placa]" (ngModelChange)="destinoSeleccion[v.placa] = $event"
+                [attr.aria-label]="'Destino para combinar ' + v.placa"
                 class="text-[11px] border border-[#BBDEFB] rounded-lg px-1 py-0.5 bg-white text-slate-600">
-                <option *ngFor="let d of vehiculosBajaCarga" [value]="d.placa" [disabled]="d.placa === v.placa">{{ d.placa }} ({{ d.unidades }}/{{ d.capacidad }})</option>
+                <option *ngFor="let d of destinosPosibles(v.placa)" [value]="d.placa">{{ d.placa }} ({{ d.unidades }}/{{ d.capacidad }})</option>
               </select>
-              <button (click)="combinarVehiculos(v.placa, sel.value)"
-                class="px-2 py-0.5 text-[11px] font-semibold text-white bg-[#1565C0] hover:bg-[#0D47A1] rounded-lg transition">
-                Combinar
+              <button (click)="combinarVehiculos(v.placa, destinoSeleccion[v.placa])"
+                [disabled]="combinando || !destinoSeleccion[v.placa]"
+                class="px-2 py-0.5 text-[11px] font-semibold text-white bg-[#1565C0] hover:bg-[#0D47A1] rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+                {{ combinando ? '...' : 'Combinar' }}
               </button>
               <span class="text-[10px] text-slate-400">o queda así</span>
             </div>
           </div>
-          <p class="text-[10px] text-slate-500 mt-1">Al combinar, el vehículo de origen queda vacío y sus pedidos pasan al destino.</p>
+          <p class="text-[10px] text-slate-500 mt-1">Al combinar, el vehículo de origen queda vacío y sus pedidos pasan al destino. Solo se muestran destinos con espacio.</p>
         </div>
         <div *ngIf="resultado.sinUbicar > 0" class="rounded-lg border border-[#E0E0E0] p-2 text-xs text-slate-500">
           <i class="fas fa-exclamation-triangle text-[#D32F2F] mr-1"></i> {{ resultado.sinUbicar }} pedido(s) sin ubicar quedarán sin placa.

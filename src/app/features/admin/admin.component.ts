@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
-import { EstadoAdmin, EstadoPlaca, DatosAsignacion, DatosExcel } from '../../core/models';
+import { EstadoAdmin, EstadoPlaca, DatosAsignacion, DatosExcel, Usuario } from '../../core/models';
 import { ExcelService } from '../../shared/services/excel.service';
 
 @Component({
@@ -20,6 +20,9 @@ export class AdminComponent implements OnInit {
   esManana = false;
   fechaGlobal = '';
   datosAsignacion: DatosAsignacion | null = null;
+  usuarios: Usuario[] = [];
+  nuevoUsuario = { usuario: '', nombre: '', rol: 'chofer', password: '' };
+  modalUsuariosAbierto = false;
 
   constructor(
     private api: ApiService,
@@ -34,6 +37,50 @@ export class AdminComponent implements OnInit {
     await this.cargarAdmin();
     await this.cargarAsignacion();
     this.fechaGlobal = this.sesion.obtener()?.fechaGlobal ?? '';
+  }
+
+  abrirModalUsuarios(): void {
+    this.modalUsuariosAbierto = true;
+    void this.cargarUsuarios();
+    this.cdr.detectChanges();
+  }
+
+  cerrarModalUsuarios(): void {
+    this.modalUsuariosAbierto = false;
+    this.cdr.detectChanges();
+  }
+
+  async cargarUsuarios(): Promise<void> {
+    try {
+      const res = await this.api.post('usuarios_listar', {}, this.token);
+      if (res.success) this.usuarios = res.usuarios as Usuario[];
+      else this.usuarios = [];
+      this.cdr.detectChanges();
+    } catch { this.usuarios = []; }
+  }
+
+  async crearUsuario(): Promise<void> {
+    const u = this.nuevoUsuario;
+    if (!u.usuario || !u.nombre || !u.password) return;
+    const res = await this.api.post('usuarios_crear', u, this.token);
+    if (!res.success) { this.swal.error(res.error || 'No se pudo crear el usuario.'); return; }
+    this.nuevoUsuario = { usuario: '', nombre: '', rol: 'chofer', password: '' };
+    await this.cargarUsuarios();
+    this.swal.exito('Usuario creado.');
+  }
+
+  async actualizarUsuario(u: Usuario): Promise<void> {
+    const res = await this.api.post('usuarios_actualizar', u, this.token);
+    if (!res.success) this.swal.error(res.error || 'No se pudo actualizar el usuario.');
+    else await this.cargarUsuarios();
+  }
+
+  async restaurarPassword(usuario: string): Promise<void> {
+    const password = window.prompt(`Nueva contraseña para ${usuario} (mínimo 12 caracteres, mayúscula, minúscula y número):`);
+    if (!password) return;
+    const res = await this.api.post('usuarios_restaurarPassword', { usuario, password }, this.token);
+    if (res.success) this.swal.exito('Contraseña restablecida.');
+    else this.swal.error(res.error || 'No se pudo restablecer la contraseña.');
   }
 
   get token(): string {

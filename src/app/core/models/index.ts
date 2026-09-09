@@ -108,6 +108,14 @@ export interface DatosExcel {
   asignacion: unknown[][];
 }
 
+export interface Usuario {
+  usuario: string;
+  nombre: string;
+  rol: 'admin' | 'soporte' | 'chofer';
+  activo: boolean;
+  bloqueadoHasta?: number | null;
+}
+
 export interface EstadoPlanificacion {
   success: boolean;
   hojaLista: boolean;

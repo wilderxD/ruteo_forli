@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
 import { SesionService } from '../../core/services/sesion.service';
+import { ApiService } from '../../core/services/api.service';
 
 @Component({
   selector: 'app-layout',
@@ -11,12 +12,30 @@ import { SesionService } from '../../core/services/sesion.service';
   templateUrl: './layout.component.html',
   styleUrls: ['./layout.component.scss']
 })
-export class LayoutComponent {
+export class LayoutComponent implements OnInit {
   constructor(
     private auth: AuthService,
     public sesion: SesionService,
-    private router: Router
+    private router: Router,
+    private api: ApiService
   ) {}
+
+  async ngOnInit(): Promise<void> {
+    // Chequeo proactivo de sesión al cargar la app: si el token venció, el backend
+    // responde 401 y api.service limpia la sesión, avisa y redirige a /login.
+    try {
+      const res = await this.api.get('refreshSession', {}, this.sesion.token);
+      if (res?.success) {
+        this.sesion.actualizar({
+          nombre: res.nombre,
+          rol: res.rol,
+          placas: Array.isArray(res.placas) ? res.placas : []
+        });
+      }
+    } catch {
+      /* api.service ya maneja la expiración */
+    }
+  }
 
   get nombre(): string {
     return this.sesion.obtener()?.nombre ?? '';

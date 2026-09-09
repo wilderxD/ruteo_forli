@@ -16,6 +16,9 @@
       <input type="date" [(ngModel)]="fechaGlobal" (change)="cambiarFecha()" class="bg-transparent text-sm text-slate-700 focus:outline-none">
     </div>
     <div class="flex flex-wrap gap-2">
+      <button (click)="abrirModalUsuarios()" class="px-3 py-1.5 text-sm font-semibold text-[#D32F2F] hover:bg-[#D32F2F]/10 rounded-lg transition border border-[#D32F2F]/40 bg-white btn-ghost">
+        <i class="fas fa-user-shield mr-1"></i> Usuarios
+      </button>
       <button (click)="asignarChoferes()" class="px-3 py-1.5 text-sm font-semibold text-[#D32F2F] hover:bg-[#D32F2F]/10 rounded-lg transition border border-[#D32F2F]/40 bg-white btn-ghost">
         <i class="fas fa-users-gear mr-1"></i> Asignar Choferes
       </button>
@@ -59,6 +62,63 @@
       <p class="text-sm text-slate-600 mb-3"><i class="fas fa-user mr-2 text-[#5B403D]"></i> {{ item[1].chofer || 'Sin asignar' }}</p>
       <div class="w-full bg-[#E8ECEB] rounded-full h-2 overflow-hidden">
         <div class="h-full rounded-full transition-all duration-500" [style.width]="porcentaje(item[1]) + '%'" [style.background]="colorPct(item[1])"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Usuarios -->
+<div *ngIf="modalUsuariosAbierto" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" (click)="cerrarModalUsuarios()">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl" (click)="$event.stopPropagation()">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h4 class="font-bold text-slate-800"><i class="fas fa-user-shield mr-2 text-[#D32F2F]"></i>Usuarios</h4>
+      <button (click)="cerrarModalUsuarios()" aria-label="Cerrar" class="text-slate-500 hover:text-slate-700"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-4 space-y-4">
+      <div>
+        <p class="text-xs text-slate-500 mb-2">Nuevo usuario</p>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <input [(ngModel)]="nuevoUsuario.usuario" aria-label="Usuario" autocomplete="username" placeholder="Usuario / DNI" class="campo px-3 py-2 text-sm">
+          <input [(ngModel)]="nuevoUsuario.nombre" aria-label="Nombre" placeholder="Nombre completo" class="campo px-3 py-2 text-sm">
+          <select [(ngModel)]="nuevoUsuario.rol" aria-label="Rol" class="campo px-3 py-2 text-sm">
+            <option value="chofer">Chofer</option><option value="soporte">Soporte</option><option value="admin">Administrador</option>
+          </select>
+          <input [(ngModel)]="nuevoUsuario.password" aria-label="Contraseña inicial" autocomplete="new-password" type="password" placeholder="Contraseña inicial" class="campo px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-center justify-between gap-3 mt-2">
+          <p class="text-[11px] text-slate-400">Mínimo 12 caracteres, con mayúscula, minúscula y número.</p>
+          <button (click)="crearUsuario()" class="px-4 py-2 text-sm font-semibold bg-[#D32F2F] text-white rounded-lg transition hover:bg-[#AF101A]">
+            <i class="fas fa-user-plus mr-1"></i> Crear usuario
+          </button>
+        </div>
+      </div>
+      <div class="border-t border-[#E0E0E0] pt-3">
+        <p class="text-xs text-slate-500 mb-2">{{ usuarios.length }} {{ usuarios.length === 1 ? 'usuario' : 'usuarios' }}</p>
+        <div class="overflow-x-auto max-h-72 overflow-y-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-slate-500 border-b border-[#E0E0E0]"><th class="py-1 pr-2">Usuario</th><th class="py-1 pr-2">Nombre</th><th class="py-1 pr-2">Rol</th><th class="py-1 pr-2">Estado</th><th class="py-1">Acciones</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let u of usuarios" class="border-b border-[#F0EDEC]">
+                <td class="py-2 pr-2 f-data">{{ u.usuario }}</td>
+                <td class="py-2 pr-2">{{ u.nombre }}</td>
+                <td class="py-2 pr-2">
+                  <select [(ngModel)]="u.rol" (change)="actualizarUsuario(u)" class="campo px-2 py-1" [attr.aria-label]="'Rol de ' + u.usuario">
+                    <option value="chofer">Chofer</option><option value="soporte">Soporte</option><option value="admin">Administrador</option>
+                  </select>
+                </td>
+                <td class="py-2 pr-2">
+                  <label class="inline-flex items-center gap-1 text-xs text-slate-600">
+                    <input type="checkbox" [(ngModel)]="u.activo" (change)="actualizarUsuario(u)"> Activo
+                  </label>
+                </td>
+                <td class="py-2">
+                  <button (click)="restaurarPassword(u.usuario)" class="text-[#D32F2F] underline text-xs">Restablecer contraseña</button>
+                </td>
+              </tr>
+              <tr *ngIf="usuarios.length === 0"><td colspan="5" class="py-6 text-center text-slate-400">Sin usuarios. Crea el primero con el formulario.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
