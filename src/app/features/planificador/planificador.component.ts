@@ -134,6 +134,14 @@ asignando = false;
     return res?.error || res?.msg || fallback;
   }
 
+  /** Escapa HTML para los popups de Leaflet (los datos vienen de la hoja/Excel y
+   *  no son confiables; evita inyección XSS almacenado). */
+  private esc(t: any): string {
+    const d = document.createElement('div');
+    d.textContent = t == null ? '' : String(t);
+    return d.innerHTML;
+  }
+
   async cargarEstado(): Promise<void> {
     this.cargando = true;
     try {
@@ -407,7 +415,7 @@ asignando = false;
         iconAnchor: [12, 12]
       });
       L.marker([parseFloat(p.lat), parseFloat(p.lng)], { icon }).addTo(capas)
-        .bindPopup(`<b>${p.orden}. ${p.cliente}</b><br>Ped: ${p.pedido}<br>${p.direccion}`);
+        .bindPopup(`<b>${p.orden}. ${this.esc(p.cliente)}</b><br>Ped: ${this.esc(p.pedido)}<br>${this.esc(p.direccion)}`);
       pts.push([parseFloat(p.lat), parseFloat(p.lng)]);
     });
 
@@ -696,7 +704,7 @@ asignando = false;
         iconAnchor: [13, 13]
       });
       const m = L.marker([c.lat, c.lng], { icon }).addTo(this.modalMap!);
-      m.bindPopup(`Opción ${i + 1}<br>${c.direccion}`);
+      m.bindPopup(`Opción ${i + 1}<br>${this.esc(c.direccion)}`);
       m.on('click', (ev: L.LeafletMouseEvent) => {
         L.DomEvent.stopPropagation(ev.originalEvent);
         this.seleccionarCandidatoModal(c);
@@ -1099,7 +1107,7 @@ asignando = false;
           iconAnchor: [12, 12]
         });
         const m = L.marker([parseFloat(p.lat), parseFloat(p.lng)], { icon });
-        m.bindPopup(`<b>${v.placa}</b> — ${p.orden}. ${p.cliente}<br>Ped: ${p.pedido}<br>${p.distrito}`);
+        m.bindPopup(`<b>${this.esc(v.placa)}</b> — ${p.orden}. ${this.esc(p.cliente)}<br>Ped: ${this.esc(p.pedido)}<br>${this.esc(p.distrito)}`);
         m.addTo(capas);
         pts.push([parseFloat(p.lat), parseFloat(p.lng)]);
       });

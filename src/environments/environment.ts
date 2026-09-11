@@ -1,4 +1,4 @@
 export const environment = {
   production: false,
-  apiUrl: 'https://script.google.com/macros/s/AKfycbysNXQ8A_O9Itk1vPKk5qK9xsU70XFMCN-71EoxLAIZbCzjTpUd2iD1Bu0RSRcZlkBg/exec'
+  apiUrl: 'https://script.google.com/macros/s/AKfycbzFp85WNmVFroFMB5tx0iwAQH8KWihh2zjz4cNCq4fbPayKiWUbP9ettDMmdCm2s6y8/exec'
 };

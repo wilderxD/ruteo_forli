@@ -49,6 +49,14 @@ export class ChoferComponent implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef
   ) {}
 
+  /** Escapa HTML para los popups de Leaflet (los datos vienen de la hoja/Excel y
+   *  no son confiables; evita inyección XSS almacenado). */
+  private esc(t: any): string {
+    const d = document.createElement('div');
+    d.textContent = t == null ? '' : String(t);
+    return d.innerHTML;
+  }
+
   get placa(): string {
     return this.sesion.placa;
   }
@@ -255,7 +263,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
         iconAnchor: [13, 13]
       });
       const m = L.marker([parseFloat(r.lat!), parseFloat(r.lng!)], { icon }).addTo(capas);
-      m.bindPopup(`<b>${r.ordenActual}. ${r.cliente}</b><br>Ped: ${r.pedido}<br>${r.direccion}<br>${r.distrito}`);
+      m.bindPopup(`<b>${r.ordenActual}. ${this.esc(r.cliente)}</b><br>Ped: ${this.esc(r.pedido)}<br>${this.esc(r.direccion)}<br>${this.esc(r.distrito)}`);
     });
 
     sinOrden.forEach(r => {
@@ -279,7 +287,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
           this.renderizarMapa();
         });
         m.addTo(capas);
-        m.bindPopup(`<b>${r.cliente}</b> — no ubicada<br>Ped: ${r.pedido}<br>${r.direccion}<br>${r.distrito}`);
+        m.bindPopup(`<b>${this.esc(r.cliente)}</b> — no ubicada<br>Ped: ${this.esc(r.pedido)}<br>${this.esc(r.direccion)}<br>${this.esc(r.distrito)}`);
         return;
       }
 
