@@ -236,8 +236,8 @@ export class ChoferComponent implements OnInit, OnDestroy {
     capas.clearLayers();
 
     const puntos = this.rutasPlanificadas.filter(r => r.lat && r.lng);
-    const baseLat = parseFloat(this.baseLat) || -11.8582642;
-    const baseLng = parseFloat(this.baseLng) || -77.0642993;
+    const baseLat = parseFloat(this.baseLat) || -11.8297773;
+    const baseLng = parseFloat(this.baseLng) || -77.097072;
     const distritoSel = this.distritoManana;
 
     const baseIcon = L.divIcon({
@@ -448,8 +448,8 @@ export class ChoferComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const baseLat = parseFloat(this.baseLat) || -11.8582642;
-    const baseLng = parseFloat(this.baseLng) || -77.0642993;
+    const baseLat = parseFloat(this.baseLat) || -11.8297773;
+    const baseLng = parseFloat(this.baseLng) || -77.097072;
     const ordenadas = this.ordenarPorCercania(conUbicacion, baseLat, baseLng);
     ordenadas.forEach((r, i) => { r.ordenActual = String(i + 1); });
 

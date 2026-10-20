@@ -64,8 +64,8 @@ asignando = false;
   private modalRutaMapa?: L.Map;
   private modalRutaCapas?: L.LayerGroup;
   private colores = ['#D32F2F', '#1565C0', '#2E7D32', '#F57C00', '#7B1FA2', '#00695C', '#5D4037', '#C2185B', '#00838F', '#9E9D24'];
-  private static readonly BASE_LAT = -11.8582642;
-  private static readonly BASE_LNG = -77.0642993;
+  private static readonly BASE_LAT = -11.8297773;
+  private static readonly BASE_LNG = -77.097072;
 
   constructor(
     private api: ApiService,

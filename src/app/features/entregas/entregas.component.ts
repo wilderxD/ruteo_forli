@@ -33,7 +33,36 @@ export class EntregasComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    const hoy = this.hoyISO();
+    this.fechaDesde = hoy;
+    this.fechaHasta = hoy;
     await Promise.all([this.cargarPlacas(), this.cargar()]);
+  }
+
+  private hoyISO(): string {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+
+  private static readonly DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  private static readonly MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+  /** Fecha de registro en español, formato largo y 12 horas: "viernes, 14 de agosto de 2026, 11:32 p.m.". */
+  formatearFecha(valor: string): string {
+    const s = String(valor || '').trim();
+    if (!s) return '';
+    let d = new Date(s);
+    if (isNaN(d.getTime())) d = new Date(s.replace(' ', 'T'));
+    if (isNaN(d.getTime())) return s;
+    const dia = EntregasComponent.DIAS[d.getDay()];
+    const mes = EntregasComponent.MESES[d.getMonth()];
+    let h = d.getHours();
+    const ampm = h >= 12 ? 'p.m.' : 'a.m.';
+    h = h % 12; if (h === 0) h = 12;
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return dia + ', ' + d.getDate() + ' de ' + mes + ' de ' + d.getFullYear() + ', ' + h + ':' + min + ' ' + ampm;
   }
 
   async cargarPlacas(): Promise<void> {
@@ -72,10 +101,12 @@ export class EntregasComponent implements OnInit {
 
   abrirDetalle(r: RegistroEntrega): void {
     this.detalle = r;
+    this.cdr.detectChanges();
   }
 
   cerrarDetalle(): void {
     this.detalle = null;
+    this.cdr.detectChanges();
   }
 
   abrirFoto(base64: string): void {

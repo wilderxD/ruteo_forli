@@ -46,7 +46,7 @@
     <p class="text-xs text-slate-600 mb-1 f-data"><i class="fas fa-truck mr-1 text-slate-400"></i>{{ r.placa }} {{ r.nombreChofer ? '| ' + r.nombreChofer : '' }}</p>
     <p class="text-xs text-slate-500 mb-1"><i class="fas fa-map-marker-alt mr-1 text-[#F57C00]"></i>{{ r.distrito }}</p>
     <div class="mt-2 flex items-center gap-2">
-      <span class="text-xs text-slate-500 f-data"><i class="far fa-clock mr-1"></i>{{ r.fechaRegistro }}</span>
+      <span class="text-xs text-slate-500 f-data"><i class="far fa-clock mr-1"></i>{{ formatearFecha(r.fechaRegistro) }}</span>
       <span class="text-xs px-2 py-0.5 bg-[#005F7B]/10 text-[#1D4ED8] rounded-sm f-data"><i class="fas fa-camera mr-1"></i>{{ r.fotos.length }} fotos</span>
     </div>
     <div *ngIf="r.horaLlegada || r.horaSalida || r.kilometraje" class="mt-1 text-xs text-slate-500 f-data">
@@ -67,7 +67,7 @@
         <div><span class="font-bold text-[#5B403D] block text-xs">PEDIDO</span><div class="font-semibold text-slate-700 f-data">{{ detalle.pedido }}</div></div>
         <div><span class="font-bold text-[#5B403D] block text-xs">PLACA</span><div class="font-semibold text-slate-700 f-data">{{ detalle.placa }}</div></div>
         <div><span class="font-bold text-[#5B403D] block text-xs">ESTADO</span><span class="badge px-2 py-0.5 rounded text-xs font-bold bg-[#2E7D32]/10 text-[#2E7D32]">{{ detalle.estado }}</span></div>
-        <div><span class="font-bold text-[#5B403D] block text-xs">FECHA REGISTRO</span><div class="font-semibold text-slate-700 f-data">{{ detalle.fechaRegistro }}</div></div>
+        <div><span class="font-bold text-[#5B403D] block text-xs">FECHA REGISTRO</span><div class="font-semibold text-slate-700 f-data">{{ formatearFecha(detalle.fechaRegistro) }}</div></div>
       </div>
       <div><span class="font-bold text-[#5B403D] block text-xs">DIRECCIÓN</span><div class="text-xs text-slate-600">{{ detalle.direccion }}</div></div>
       <div class="grid grid-cols-2 gap-2">
