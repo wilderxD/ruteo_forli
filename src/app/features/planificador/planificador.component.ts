@@ -3,16 +3,17 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
 import * as L from 'leaflet';
-import Swal from 'sweetalert2';
 import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
+import { CargandoService } from '../../shared/services/cargando.service';
+import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 import { EstadoPlanificacion, ResultadoDistribucion, DetalleGeo, CandidatoGeo, VehiculoConfig, AsignacionVehiculo, NoAsignado, PedidoAsignado } from '../../core/models';
 
 @Component({
   selector: 'app-planificador',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
   templateUrl: './planificador.component.html',
   styleUrls: ['./planificador.component.scss']
 })
@@ -71,6 +72,7 @@ asignando = false;
     private api: ApiService,
     private sesion: SesionService,
     private swal: SwalService,
+    private carga: CargandoService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -144,6 +146,7 @@ asignando = false;
 
   async cargarEstado(): Promise<void> {
     this.cargando = true;
+    this.carga.mostrar('planificador', 'Cargando estado de planificación…');
     try {
       const res = await this.api.get('planificar_estado', {}, this.sesion.token);
       if (res?.success) {
@@ -162,15 +165,16 @@ asignando = false;
       this.swal.error('Sin conexión. No se pudo cargar el estado.');
     } finally {
       this.cargando = false;
+      this.carga.ocultar('planificador');
       this.cdr.detectChanges();
     }
   }
 
   async crearHoja(): Promise<void> {
-    this.swal.cargando(true, 'Creando hoja "planificacion"...');
+    this.carga.mostrar('planificador', 'Creando hoja "planificacion"...');
     try {
       const res = await this.api.post('planificar_crear_hoja', {}, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         this.swal.exito('Hoja "planificacion" creada con la estructura de "rutas".');
         await this.cargarEstado();
@@ -178,16 +182,16 @@ asignando = false;
         this.swal.error(this.msgApi(res, 'No se pudo crear la hoja.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión. No se pudo crear la hoja.');
     }
   }
 
   async crearHojaComposicion(): Promise<void> {
-    this.swal.cargando(true, 'Creando hoja "composicion"...');
+    this.carga.mostrar('planificador', 'Creando hoja "composicion"...');
     try {
       const res = await this.api.post('planificar_crear_hoja_composicion', {}, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         this.swal.exito('Hoja "composicion" creada (CODIGO | UNIDADES).');
         await this.cargarEstado();
@@ -195,16 +199,16 @@ asignando = false;
         this.swal.error(this.msgApi(res, 'No se pudo crear la hoja.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión.');
     }
   }
 
   async crearHojaVehiculos(): Promise<void> {
-    this.swal.cargando(true, 'Creando hoja "vehiculos"...');
+    this.carga.mostrar('planificador', 'Creando hoja "vehiculos"...');
     try {
       const res = await this.api.post('planificar_crear_hoja_vehiculos', {}, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         this.swal.exito('Hoja "vehiculos" creada (PLACA | CAPACIDAD | ZONAS).');
         await this.cargarEstado();
@@ -212,7 +216,7 @@ asignando = false;
         this.swal.error(this.msgApi(res, 'No se pudo crear la hoja.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión.');
     }
   }
@@ -235,10 +239,10 @@ asignando = false;
       this.swal.aviso('Ingresa el código del producto.', 'warning');
       return;
     }
-    this.swal.cargando(true, 'Guardando producto...');
+    this.carga.mostrar('planificador', 'Guardando producto...');
     try {
       const res = await this.api.post('planificar_guardar_codigo', { codigo, unidades: this.nuevoCodigoUnidades }, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         this.cerrarModalCodigo();
         this.swal.exito('Producto registrado.');
@@ -247,7 +251,7 @@ asignando = false;
         this.swal.error(this.msgApi(res, 'No se pudo guardar.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión.');
     }
   }
@@ -274,10 +278,10 @@ asignando = false;
       return;
     }
     const zonas = this.zonasDisponibles.filter(z => this.nuevasZonas[z]);
-    this.swal.cargando(true, 'Guardando vehículo...');
+    this.carga.mostrar('planificador', 'Guardando vehículo...');
     try {
       const res = await this.api.post('planificar_guardar_vehiculo', { placa, capacidad: this.nuevaCapacidad, zonas }, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         this.cerrarModalVehiculo();
         this.swal.exito('Vehículo registrado.');
@@ -286,7 +290,7 @@ asignando = false;
         this.swal.error(this.msgApi(res, 'No se pudo guardar.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión.');
     }
   }
@@ -317,12 +321,12 @@ asignando = false;
       this.swal.aviso('No hay códigos para guardar.', 'warning');
       return;
     }
-    this.swal.cargando(true, 'Guardando productos...');
+    this.carga.mostrar('planificador', 'Guardando productos...');
     try {
       for (const p of pend) {
         await this.api.post('planificar_guardar_codigo', { codigo: p.codigo, unidades: p.unidades || 1 }, this.sesion.token);
       }
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       await this.cargarEstado();
       const restantes = this.estado?.codigosSinComposicion || [];
       if (restantes.length === 0) {
@@ -334,7 +338,7 @@ asignando = false;
         this.swal.aviso('Quedan ' + restantes.length + ' código(s) por registrar.', 'info');
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión.');
     }
   }
@@ -516,9 +520,9 @@ asignando = false;
         return;
       }
 
-      this.swal.cargando(true, 'Cargando ' + filasNorm.length + ' filas a la hoja "planificacion"...');
+      this.carga.mostrar('planificador', 'Cargando ' + filasNorm.length + ' filas a la hoja "planificacion"...');
       const res = await this.api.post('planificar_subir_datos', { filas: filasNorm }, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         this.swal.exito('Datos cargados: ' + res.filas + ' filas.');
         this.detallesGeo = [];
@@ -529,7 +533,7 @@ asignando = false;
       }
       input.value = '';
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('No se pudo leer el archivo.');
     }
   }
@@ -540,20 +544,16 @@ asignando = false;
     this.geoTotal = this.estado.sinCoords;
     this.geoProgreso = 0;
 
-    Swal.fire({
-      title: 'Geolocalizando... 0 / ' + this.geoTotal,
-      allowOutsideClick: false,
-      showConfirmButton: false,
-      didOpen: () => Swal.showLoading()
-    });
+    this.carga.mostrar('planificador', 'Geolocalizando... 0 / ' + this.geoTotal, 0);
 
     try {
       let restantes = this.geoTotal;
       while (restantes > 0) {
         const res = await this.api.post('planificar_geocodificar', {}, this.sesion.token);
         if (!res?.success) {
-          Swal.close();
+          this.carga.ocultar('planificador');
           this.geocodificando = false;
+          this.cdr.detectChanges();
           this.swal.error(this.msgApi(res, 'Error al geolocalizar.'));
           return;
         }
@@ -561,12 +561,12 @@ asignando = false;
         restantes = res.restantes || 0;
         if (Array.isArray(res.detalles)) this.detallesGeo = res.detalles as DetalleGeo[];
         this.cdr.detectChanges();
-        Swal.update({ title: 'Geolocalizando... ' + this.geoProgreso + ' / ' + this.geoTotal });
+        const pct = this.geoTotal ? (this.geoProgreso / this.geoTotal) * 100 : 0;
+        this.carga.progreso('planificador', pct, 'Geolocalizando... ' + this.geoProgreso + ' / ' + this.geoTotal);
       }
-      Swal.close();
+      this.carga.ocultar('planificador');
       this.geocodificando = false;
       await this.cargarEstado();
-
       const mult = this.detallesGeo.filter(d => d.estado === 'multiple').length;
       const centro = this.detallesGeo.filter(d => d.estado === 'centro_distrito').length;
       const noEncontradas = this.detallesGeo.filter(d => d.estado === 'no_encontrada').length;
@@ -579,8 +579,9 @@ asignando = false;
         this.swal.exito('Geolocalización completa. Todos los pedidos tienen coordenadas.');
       }
     } catch {
-      Swal.close();
+      this.carga.ocultar('planificador');
       this.geocodificando = false;
+      this.cdr.detectChanges();
       this.swal.error('Sin conexión. No se pudo geolocalizar.');
     }
   }
@@ -612,10 +613,10 @@ asignando = false;
       this.swal.error('El pedido no tiene número registrado en la hoja "planificacion".');
       return;
     }
-    this.swal.cargando(true, 'Guardando ubicación...');
+    this.carga.mostrar('planificador', 'Guardando ubicación...');
     try {
       const res = await this.api.post('planificar_set_coord', { pedido: d.pedido, lat: c.lat, lng: c.lng }, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         d.lat = String(c.lat);
         d.lng = String(c.lng);
@@ -627,7 +628,7 @@ asignando = false;
         this.swal.error(this.msgApi(res, 'No se pudo guardar.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión.');
     }
   }
@@ -794,10 +795,10 @@ asignando = false;
       this.swal.error('El pedido no tiene número registrado en la hoja "planificacion".');
       return;
     }
-    this.swal.cargando(true, 'Guardando ubicación...');
+    this.carga.mostrar('planificador', 'Guardando ubicación...');
     try {
       const res = await this.api.post('planificar_set_coord', { pedido: d.pedido, lat: this.modalLat, lng: this.modalLng }, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         d.lat = String(this.modalLat);
         d.lng = String(this.modalLng);
@@ -819,7 +820,7 @@ asignando = false;
         this.swal.error(this.msgApi(res, 'No se pudo guardar.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión.');
     }
   }
@@ -832,11 +833,12 @@ asignando = false;
     }
     if (this.asignando) return;
     this.asignando = true;
-    this.swal.cargando(true, 'Optimizando distribución por distancia total...');
+    this.carga.mostrar('planificador', 'Optimizando distribución por distancia total...');
     try {
       const res = await this.api.post('planificar_distribuir', { vehiculos: this.autoVehiculos ? [] : placas }, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.asignando = false;
+      this.cdr.detectChanges();
       if (res?.success) {
         this.resultado = res as ResultadoDistribucion;
         this.placaMapa = res.vehiculos?.[0]?.placa || '';
@@ -856,16 +858,20 @@ asignando = false;
         }
         if (sinPlaca > 0) partes.push(sinPlaca + ' sin placa por capacidad/zona (revisa abajo).');
         if (faltantes > 0) partes.push(faltantes + ' código(s) sin composición (cuentan 1 ud).');
+        // Se pintan las tarjetas del resultado ANTES del aviso, para que ya estén
+        // listas detrás del popup (antes quedaban en blanco hasta cerrarlo).
+        this.cdr.detectChanges();
         await this.swal.aviso(partes.join('\n'), sinPlaca > 0 || faltantes > 0 ? 'warning' : 'info');
         // El mapa se inicializa DESPUÉS de cerrar la alerta para evitar tamaño 0/overlay
-        this.cdr.detectChanges();
         this.programarMapa();
       } else {
+        this.cdr.detectChanges();
         this.swal.error(this.msgApi(res, 'No se pudo distribuir.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.asignando = false;
+      this.cdr.detectChanges();
       this.swal.error('Sin conexión. No se pudo distribuir.');
     }
   }
@@ -880,10 +886,10 @@ asignando = false;
     );
     if (!ok) return;
 
-    this.swal.cargando(true, 'Aplicando a la hoja "rutas"...');
+    this.carga.mostrar('planificador', 'Aplicando a la hoja "rutas"...');
     try {
       const res = await this.api.post('planificar_aplicar', { asignacion: this.resultado.vehiculos }, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       if (res?.success) {
         this.swal.exito(res.msg || 'Planificación aplicada.');
         this.resultado = undefined;
@@ -895,7 +901,7 @@ asignando = false;
         this.swal.error(this.msgApi(res, 'No se pudo aplicar.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.swal.error('Sin conexión. No se pudo aplicar.');
     }
   }
@@ -1001,14 +1007,14 @@ asignando = false;
     if (!this.resultado || this.combinando) return;
     if (!destino) { this.swal.error('No hay otro vehículo de baja carga con espacio para combinar.'); return; }
     this.combinando = true;
-    this.swal.cargando(true, 'Combinando ' + origen + ' → ' + destino + '...');
+    this.carga.mostrar('planificador', 'Combinando ' + origen + ' → ' + destino + '...');
     try {
       const res = await this.api.post('planificar_combinar', {
         vehiculos: this.resultado.vehiculos,
         origen,
         destino
       }, this.sesion.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.combinando = false;
       if (res?.success) {
         this.resultado.vehiculos = (res.vehiculos || []) as AsignacionVehiculo[];
@@ -1019,18 +1025,19 @@ asignando = false;
         this.programarMapa();
         this.swal.exito('Combinado. ' + origen + ' quedó como vehículo vacío.');
       } else {
+        this.cdr.detectChanges();
         this.swal.error(this.msgApi(res, 'No se pudo combinar.'));
       }
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('planificador');
       this.combinando = false;
+      this.cdr.detectChanges();
       this.swal.error('Sin conexión. No se pudo combinar.');
     }
   }
 
   private programarMapa(): void {
     this.cdr.detectChanges();
-    console.log('[mapa] programarMapa: contenedor=', !!document.getElementById('mapaPlanificador'), 'map=', !!this.map);
     setTimeout(() => {
       this.inicializarMapa();
       this.renderizarMapa();
@@ -1048,7 +1055,6 @@ asignando = false;
 
   private inicializarMapa(): void {
     const el = document.getElementById('mapaPlanificador');
-    console.log('[mapa] inicializarMapa: el=', !!el, 'map=', !!this.map, 'listo=', this.mapaListo, 'tamano=', el ? el.clientWidth + 'x' + el.clientHeight : '-');
     if (!el) return;
     if (this.map) {
       // Si el contenedor actual del mapa ya no es el mismo del DOM (p.ej. fue
@@ -1066,13 +1072,11 @@ asignando = false;
     }).addTo(this.map);
     this.capas = L.layerGroup().addTo(this.map);
     this.mapaListo = true;
-    console.log('[mapa] mapa creado OK');
     setTimeout(() => this.map?.invalidateSize(), 0);
   }
 
   renderizarMapa(): void {
     if (!this.mapaListo || !this.map || !this.capas || !this.resultado) {
-      console.log('[mapa] renderizarMapa: SKIP listo=', this.mapaListo, 'map=', !!this.map, 'capas=', !!this.capas, 'resultado=', !!this.resultado);
       return;
     }
     const capas = this.capas;
@@ -1119,7 +1123,6 @@ asignando = false;
       }
     });
 
-    console.log('[mapa] renderizarMapa: pts=', pts.length, 'vehiculos=', this.resultado.vehiculos.length);
     // Fuerza a Leaflet a medir el tamaño real del contenedor antes de calcular
     // el zoom (evita la vista mundial cuando fitBounds corre con tamaño 0).
     this.map.invalidateSize();

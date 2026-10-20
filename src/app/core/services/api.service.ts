@@ -4,6 +4,10 @@ import { environment } from '../../../environments/environment';
 import { SesionService } from './sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
 
+export interface ApiOpciones {
+  reintentar?: boolean;
+}
+
 /**
  * Cliente de la REST API de Apps Script.
  *
@@ -26,29 +30,72 @@ export class ApiService {
   private base = environment.apiUrl;
   private redirigiendoSesion = false;
 
+  private static readonly INTENTOS = 3;
+  private static readonly ESPERAS = [400, 1200];
+  private static readonly TIMEOUT_MS = 12000;
+
   constructor(private sesion: SesionService, private router: Router, private swal: SwalService) {}
 
-  async get(accion: string, params: any = {}, token = ''): Promise<any> {
-    return this.post(accion, params, token);
+  async get(accion: string, params: any = {}, token = '', opciones: ApiOpciones = {}): Promise<any> {
+    return this.post(accion, params, token, { reintentar: true, ...opciones });
   }
 
-  async post(accion: string, body: any = {}, token = ''): Promise<any> {
+  async post(accion: string, body: any = {}, token = '', opciones: ApiOpciones = {}): Promise<any> {
+    const reintentar = opciones.reintentar ?? false;
     const q = new URLSearchParams();
     q.set('api', accion);
     const url = `${this.base}?${q.toString()}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...body, ...(token ? { token } : {}) })
-    });
-    const data: any = await res.json();
-    // Sesión expirada/inválida: se pide volver a ingresar automáticamente.
-    // Se exime 'login' (un 401 ahí significa credenciales incorrectas, no sesión vencida).
-    if (accion !== 'login' && data?.codigo === 401) {
-      this.gestionarSesionExpirada();
+    const payload = JSON.stringify({ ...body, ...(token ? { token } : {}) });
+
+    // Apps Script puede responder 404 o colgarse de forma intermitente por el
+    // redirect interno. Cada intento lleva timeout para que la promesa SIEMPRE
+    // resuelva y la UI no quede con el spinner infinito. Los POST de escritura
+    // no se reintentan por defecto para evitar operaciones duplicadas.
+    let ultimoError: unknown = new Error('No se pudo conectar con el servidor.');
+    for (let intento = 0; intento < ApiService.INTENTOS; intento++) {
+      const controlador = new AbortController();
+      const temporizador = setTimeout(() => controlador.abort(), ApiService.TIMEOUT_MS);
+      let reintentarIntento = false;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: payload,
+          signal: controlador.signal
+        });
+
+        if ((res.status === 404 || res.status >= 500) && reintentar && intento < ApiService.INTENTOS - 1) {
+          ultimoError = new Error('HTTP ' + res.status);
+          reintentarIntento = true;
+        } else {
+          const data: any = await res.json();
+          // Sesión expirada/inválida: se pide volver a ingresar automáticamente.
+          // Se exime 'login' (un 401 ahí significa credenciales incorrectas, no sesión vencida).
+          if (accion !== 'login' && data?.codigo === 401) {
+            this.gestionarSesionExpirada();
+          }
+          return data;
+        }
+      } catch (e) {
+        ultimoError = (e as any)?.name === 'AbortError'
+          ? new Error('El servidor tardó demasiado en responder.')
+          : e;
+        reintentarIntento = reintentar && intento < ApiService.INTENTOS - 1;
+      } finally {
+        clearTimeout(temporizador);
+      }
+
+      if (reintentarIntento) {
+        await ApiService.esperar(ApiService.ESPERAS[intento]);
+      }
     }
-    return data;
+
+    throw ultimoError;
+  }
+
+  private static esperar(ms: number | undefined): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms ?? 400));
   }
 
   private gestionarSesionExpirada(): void {

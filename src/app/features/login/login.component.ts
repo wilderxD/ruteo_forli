@@ -1,14 +1,16 @@
-import { Component } from '@angular/core';
+import { ChangeDetectorRef, Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { SesionService } from '../../core/services/sesion.service';
+import { CargandoService } from '../../shared/services/cargando.service';
+import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss']
 })
@@ -17,11 +19,14 @@ export class LoginComponent {
   password = '';
   error = '';
   cargando = false;
+  recordar = false;
 
   constructor(
     private auth: AuthService,
     private sesion: SesionService,
-    private router: Router
+    private carga: CargandoService,
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ingresar(): Promise<void> {
@@ -33,8 +38,10 @@ export class LoginComponent {
       return;
     }
     this.cargando = true;
+    this.carga.mostrar('login', 'Validando credenciales…');
+    this.cdr.detectChanges();
     try {
-      const r = await this.auth.login(user, pass);
+      const r = await this.auth.login(user, pass, this.recordar);
       if (r.ok) {
         const rol = this.sesion.rol;
         const destino = rol === 'admin' ? '/admin' : rol === 'soporte' ? '/soporte' : '/chofer';
@@ -46,6 +53,8 @@ export class LoginComponent {
       this.error = 'Sin conexión. Verifique su señal e intente de nuevo.';
     } finally {
       this.cargando = false;
+      this.carga.ocultar('login');
+      this.cdr.detectChanges();
     }
   }
 }

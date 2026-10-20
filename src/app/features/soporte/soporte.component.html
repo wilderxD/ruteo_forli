@@ -33,9 +33,11 @@
   </div>
 </div>
 
-<div *ngIf="filtrar().length === 0" class="text-center py-8 text-slate-400 bg-white rounded-lg border border-dashed border-slate-300">No se encontraron registros de atención</div>
+<app-progreso-seccion clave="soporte"></app-progreso-seccion>
 
-<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+<div *ngIf="!cargando && filtrar().length === 0" class="text-center py-8 text-slate-400 bg-white rounded-lg border border-dashed border-slate-300">No se encontraron registros de atención</div>
+
+<div *ngIf="!cargando" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
   <div *ngFor="let r of filtrar()" (click)="abrirDetalle(r)" class="bg-white rounded-lg border border-[#E0E0E0] p-4 shadow-sm hover:shadow-md transition-all cursor-pointer card-hover">
     <div class="flex justify-between items-start mb-2">
       <h5 class="font-bold text-slate-800 text-base text-[#AF101A]">{{ r.cliente }}</h5>

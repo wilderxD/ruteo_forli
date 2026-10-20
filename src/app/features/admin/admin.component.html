@@ -32,6 +32,8 @@
   </div>
 </div>
 
+<app-progreso-seccion clave="admin"></app-progreso-seccion>
+
 <div class="flex justify-between items-center mb-4">
   <button (click)="cargarAdmin()" class="text-sm text-[#5B403D] hover:text-[#D32F2F] transition font-medium btn-ghost">
     <i class="fas fa-sync-alt mr-1"></i> Refrescar Panel
@@ -41,13 +43,13 @@
   </span>
 </div>
 
-<div *ngIf="estados.length === 0" class="text-center py-12">
+<div *ngIf="!cargando && estados.length === 0" class="text-center py-12">
   <div class="bg-[#FFFFFF] rounded-lg p-8 text-[#5B403D] border border-dashed border-[#E0E0E0] inline-block">
     <i class="fas fa-inbox text-4xl mb-3 block"></i>No hay rutas para este día.
   </div>
 </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+<div *ngIf="!cargando" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
   <div *ngFor="let item of estados" (click)="verRuta(item[0])" class="bg-white rounded-lg border border-[#E0E0E0] overflow-hidden hover:shadow-md transition-all cursor-pointer card-hover">
     <div class="bg-[#121212] px-4 py-3 border-b border-[#263238]">
       <div class="flex justify-between items-center">
@@ -63,6 +65,72 @@
       <div class="w-full bg-[#E8ECEB] rounded-full h-2 overflow-hidden">
         <div class="h-full rounded-full transition-all duration-500" [style.width]="porcentaje(item[1]) + '%'" [style.background]="colorPct(item[1])"></div>
       </div>
+      <div class="mt-3 pt-3 border-t border-[#F0EDEC]">
+        <button (click)="abrirMapaRuta(item[0], $event)"
+          class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold text-[#1565C0] hover:bg-sky-50 rounded-lg transition border border-[#1565C0]/40 bg-white btn-ghost"
+          [attr.aria-label]="'Ver mapa de la ruta de ' + item[0]">
+          <i class="fas fa-map-location-dot"></i> Ver mapa
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Mapa de Ruta -->
+<div *ngIf="modalMapaAbierto" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4" (click)="cerrarMapaRuta()">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl h-[88vh] max-h-[900px] flex flex-col overflow-hidden"
+    (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="mapa-ruta-titulo">
+    <div class="px-4 py-3 border-b border-[#E0E0E0] flex items-start justify-between gap-3 shrink-0">
+      <div>
+        <h4 id="mapa-ruta-titulo" class="font-bold text-slate-800">
+          <i class="fas fa-map-location-dot mr-2 text-[#D32F2F]"></i>
+          Ruta de la unidad <span class="f-data">{{ placaMapa }}</span>
+        </h4>
+        <p class="text-xs text-slate-500 mt-0.5">
+          {{ esMananaMapa ? 'PRÓX. ENTREGA' : 'HOY' }}
+          <span *ngIf="fechaMapa">· {{ fechaMapa }}</span>
+        </p>
+      </div>
+      <button (click)="cerrarMapaRuta()" aria-label="Cerrar mapa" class="text-slate-500 hover:text-slate-700 p-1">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="relative flex-1 min-h-[260px] bg-[#F8F9FA]">
+      <div *ngIf="cargandoMapa" class="absolute inset-0 z-10 flex items-center justify-center bg-white">
+        <div class="w-full max-w-sm px-4">
+          <app-progreso-seccion clave="admin-mapa"></app-progreso-seccion>
+        </div>
+      </div>
+
+      <div *ngIf="!cargandoMapa && errorMapa" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white p-6 text-center">
+        <i class="fas fa-triangle-exclamation text-3xl text-[#D32F2F]"></i>
+        <p class="text-sm text-slate-600">{{ errorMapa }}</p>
+        <button (click)="reintentarMapa()" class="px-4 py-2 text-sm font-semibold text-white bg-[#D32F2F] hover:bg-[#AF101A] rounded-lg transition">
+          <i class="fas fa-sync-alt mr-1"></i> Reintentar
+        </button>
+      </div>
+
+      <ng-container *ngIf="!cargandoMapa && !errorMapa">
+        <div id="mapaRutaAdmin" class="absolute inset-0 z-0"></div>
+
+        <div *ngIf="rutasMapa.length === 0" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/90 p-6 text-center">
+          <i class="fas fa-map-location-dot text-3xl text-[#5B403D]"></i>
+          <p class="text-sm text-slate-600">No hay paradas para esta vista.</p>
+        </div>
+
+        <div *ngIf="rutasMapa.length > 0 && avisoMapa"
+          class="absolute top-3 left-3 right-3 z-10 rounded-lg border border-[#F57C00]/40 bg-[#FFF8F7] px-3 py-2 text-xs text-[#B25E00] shadow-sm">
+          <i class="fas fa-triangle-exclamation mr-1"></i> {{ avisoMapa }}
+        </div>
+      </ng-container>
+    </div>
+
+    <div class="px-4 py-3 border-t border-[#E0E0E0] flex items-center justify-between gap-3 shrink-0">
+      <p class="hidden sm:block text-xs text-slate-500"><i class="fas fa-info-circle mr-1"></i>Pasa el mouse o toca un punto para ver el detalle.</p>
+      <button (click)="cerrarMapaRuta()" class="ml-auto px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition border border-slate-200 bg-white">
+        Cerrar
+      </button>
     </div>
   </div>
 </div>
@@ -94,6 +162,7 @@
       </div>
       <div class="border-t border-[#E0E0E0] pt-3">
         <p class="text-xs text-slate-500 mb-2">{{ usuarios.length }} {{ usuarios.length === 1 ? 'usuario' : 'usuarios' }}</p>
+        <app-progreso-seccion clave="admin-usuarios" [compacto]="true"></app-progreso-seccion>
         <div class="overflow-x-auto max-h-72 overflow-y-auto">
           <table class="w-full text-sm">
             <thead><tr class="text-left text-slate-500 border-b border-[#E0E0E0]"><th class="py-1 pr-2">Usuario</th><th class="py-1 pr-2">Nombre</th><th class="py-1 pr-2">Rol</th><th class="py-1 pr-2">Estado</th><th class="py-1">Acciones</th></tr></thead>

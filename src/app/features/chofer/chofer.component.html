@@ -32,9 +32,7 @@
       <option *ngFor="let d of opcionesDistritoHoy" [value]="d">{{ d }}</option>
     </select>
   </div>
-  <div *ngIf="cargando" class="flex justify-center py-10">
-    <span class="loader"></span>
-  </div>
+  <app-progreso-seccion clave="chofer"></app-progreso-seccion>
   <div *ngIf="!cargando && filtrarHoy().length === 0" class="bg-slate-50 rounded-lg p-6 text-center text-slate-500">Sin asignaciones para hoy.</div>
   <div *ngIf="!cargando && filtrarHoy().length > 0" class="space-y-3">
   <div *ngFor="let r of filtrarHoy()" class="bg-white rounded-lg border border-[#E0E0E0] border-l-4 border-l-[#D32F2F] shadow-sm card-hover">
@@ -72,36 +70,43 @@
 </div>
 
 <div *ngIf="tabActiva === 'manana'" class="space-y-3">
-  <div class="flex gap-2">
-    <div class="relative flex-1">
+  <div class="flex flex-col sm:flex-row gap-2">
+    <div class="relative sm:flex-1 sm:min-w-[180px]">
       <i class="fas fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-[#F57C00] text-sm"></i>
       <select [(ngModel)]="distritoManana" (ngModelChange)="renderizarMapa()" class="campo w-full pl-10 pr-4 py-2.5 text-sm bg-white focus:border-[#D32F2F]">
         <option value="ALL">📌 Todos los distritos ({{ rutasPlanificadas.length }})</option>
         <option *ngFor="let d of opcionesDistritoManana" [value]="d">{{ d }}</option>
       </select>
     </div>
-    <button (click)="autoRutear()" [disabled]="autoRuteando || cargando" class="px-4 py-2.5 bg-[#005F7B] hover:bg-[#004a61] disabled:opacity-50 text-white rounded-lg transition font-medium btn-ghost" title="Generar orden automático por GPS">
-      <i class="fas fa-route mr-1"></i> Auto-rutear
-    </button>
-    <button (click)="restablecerOrdenes()" class="px-4 py-2.5 text-[#BA1A1A] hover:bg-red-50 rounded-lg transition border border-red-200 btn-ghost" title="Borrar números">
-      <i class="fas fa-eraser"></i>
-    </button>
+    <div class="flex gap-2">
+      <button (click)="autoRutear()" [disabled]="autoRuteando || cargando" class="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm bg-[#005F7B] hover:bg-[#004a61] disabled:opacity-50 text-white rounded-lg transition font-medium btn-ghost" title="Generar orden automático por GPS">
+        <i class="fas fa-route mr-1"></i> Auto-rutear
+      </button>
+      <button (click)="invertirRuta()" [disabled]="!puedeInvertirRuta"
+        class="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm font-medium text-[#1565C0] hover:bg-sky-50 disabled:hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition border border-[#1565C0]/40 bg-white btn-ghost"
+        [title]="puedeInvertirRuta ? 'Invertir el orden de la ruta' : 'Disponible con 2 órdenes o más, sin selección manual en curso'"
+        aria-label="Invertir ruta">
+        <i class="fas fa-arrows-rotate mr-1"></i><span class="sm:hidden">Invertir</span><span class="hidden sm:inline">Invertir ruta</span>
+      </button>
+      <button (click)="restablecerOrdenes()" class="px-3 sm:px-4 py-2.5 text-[#BA1A1A] hover:bg-red-50 rounded-lg transition border border-red-200 btn-ghost" title="Borrar números">
+        <i class="fas fa-eraser"></i>
+      </button>
+    </div>
   </div>
-  <div *ngIf="cargando" class="flex justify-center py-10">
-    <span class="loader"></span>
-  </div>
+  <app-progreso-seccion clave="chofer"></app-progreso-seccion>
   <div *ngIf="mostrarMapa" class="rounded-lg overflow-hidden border border-[#E0E0E0] shadow-sm">
     <div id="mapaRuta" class="h-[300px] w-full z-0"></div>
   </div>
-  <div *ngIf="modoManual && pendientes.length > 0" class="bg-[#FFF8F7] rounded-lg border border-[#E4BEBA] p-3 space-y-2">
+  <div *ngIf="enModoSeleccion && pedidosSeleccion.length > 0" class="bg-[#FFF8F7] rounded-lg border border-[#E4BEBA] p-3 space-y-2">
     <div class="flex items-center justify-between">
-      <span class="text-sm font-semibold text-[#BA1A1A]"><i class="fas fa-exclamation-triangle mr-1"></i>Direcciones no ubicadas ({{ pendientes.length }})</span>
+      <span class="text-sm font-semibold text-[#BA1A1A]"><i class="fas fa-map-pin mr-1"></i>Ubicaciones por confirmar ({{ pedidosSeleccion.length }})</span>
     </div>
-    <p class="text-xs text-[#5B403D]">Arrastra el marcador rojo en el mapa o pulsa "Ubicar" y haz clic en el mapa para señalizar la dirección.</p>
-    <div *ngFor="let r of pendientes" class="bg-white rounded-lg border border-[#E0E0E0] p-2 flex flex-col sm:flex-row sm:items-center gap-2">
+    <p class="text-xs text-[#5B403D]">Arrastra el marcador rojo en el mapa o pulsa "Ubicar" y haz clic en el mapa para fijar la posición. Luego aplica para ordenar.</p>
+    <div *ngFor="let r of pedidosSeleccion" class="bg-white rounded-lg border border-[#E0E0E0] p-2 flex flex-col sm:flex-row sm:items-center gap-2">
       <div class="flex-1 min-w-0">
         <div class="text-sm font-medium text-slate-700 truncate">{{ r.cliente }} <span class="text-xs text-[#BA1A1A] f-data">Ped: {{ r.pedido }}</span></div>
         <div class="text-xs text-slate-500 truncate">{{ r.direccion }} — {{ r.distrito }}</div>
+        <div class="text-xs text-slate-400 f-data truncate" *ngIf="r.lat && r.lng">{{ r.lat }}, {{ r.lng }}</div>
         <div *ngIf="candidatosDe(r).length > 1" class="flex flex-wrap gap-1 mt-1">
           <button *ngFor="let c of candidatosDe(r); let i = index"
             (click)="elegirCandidato(r, c)"
@@ -117,15 +122,18 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <span *ngIf="ubicadaManual(r)" class="text-xs text-[#2E7D32]"><i class="fas fa-check mr-1"></i>Ubicada</span>
+        <span *ngIf="ubicadaManual(r)" class="text-xs text-[#2E7D32]"><i class="fas fa-check mr-1"></i>Fijada</span>
         <button (click)="seleccionarParaUbicar(r)" class="px-3 py-1.5 text-xs bg-[#D32F2F] hover:bg-[#AF101A] text-white rounded-lg transition font-medium" [class.opacity-60]="pendienteSeleccionado === r">
           <i class="fas fa-map-pin mr-1"></i>{{ pendienteSeleccionado === r ? 'Clic en el mapa' : 'Ubicar' }}
+        </button>
+        <button *ngIf="!esPendienteAuto(r)" (click)="quitarSeleccion(r)" class="px-2 py-1.5 text-xs text-slate-500 hover:text-[#BA1A1A] rounded-lg border border-slate-200 transition" title="Quitar de la selección">
+          <i class="fas fa-times"></i>
         </button>
       </div>
     </div>
     <div class="flex gap-2 pt-1">
       <button (click)="confirmarOrdenar()" class="flex-1 bg-[#2E7D32] hover:bg-[#1B5E20] text-white py-2 rounded-lg text-sm font-semibold transition">
-        <i class="fas fa-check mr-1"></i> Confirmar y ordenar
+        <i class="fas fa-check mr-1"></i> Aplicar y ordenar
       </button>
       <button (click)="omitirOrdenar()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg text-sm font-semibold transition">
         Omitir y ordenar
@@ -159,6 +167,16 @@
         <div class="md:w-32 flex md:block items-center gap-2">
           <label class="text-xs text-[#5B403D] block mb-1">N° orden</label>
           <input type="number" class="campo w-full rounded-lg px-3 py-2 text-sm text-center font-medium focus:border-[#D32F2F]" [value]="r.ordenActual" (change)="setOrden(r, $any($event.target).value)" placeholder="#">
+          <button (click)="seleccionarPedido(r)"
+            class="mt-2 w-full px-2 py-1.5 text-xs rounded-lg border transition font-medium"
+            [class.bg-[#D32F2F]]="esSeleccionManual(r)"
+            [class.text-white]="esSeleccionManual(r)"
+            [class.bg-white]="!esSeleccionManual(r)"
+            [class.text-[#D32F2F]]="!esSeleccionManual(r)"
+            [class.border-[#D32F2F]/40]="!esSeleccionManual(r)"
+            title="Elegir/ajustar la ubicación en el mapa y rutear con ella">
+            <i class="fas fa-map-pin mr-1"></i>{{ esSeleccionManual(r) ? 'Seleccionado' : 'Seleccionar' }}
+          </button>
         </div>
       </div>
     </div>

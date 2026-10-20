@@ -4,19 +4,6 @@ import Swal from 'sweetalert2';
 @Injectable({ providedIn: 'root' })
 export class SwalService {
 
-  cargando(mostrar: boolean, texto = 'Procesando información logística...'): void {
-    if (mostrar) {
-      Swal.fire({
-        title: texto,
-        allowOutsideClick: false,
-        showConfirmButton: false,
-        didOpen: () => Swal.showLoading()
-      });
-    } else {
-      Swal.close();
-    }
-  }
-
   exito(texto: string, timer = 1500): Promise<unknown> {
     return Swal.fire({ icon: 'success', text: texto, timer, showConfirmButton: false });
   }

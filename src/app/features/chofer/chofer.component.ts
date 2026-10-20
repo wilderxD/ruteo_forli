@@ -7,12 +7,14 @@ import * as L from 'leaflet';
 import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
+import { CargandoService } from '../../shared/services/cargando.service';
+import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 import { Ruta, RutaCompleta, CandidatoGeo } from '../../core/models';
 
 @Component({
   selector: 'app-chofer',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
   templateUrl: './chofer.component.html',
   styleUrls: ['./chofer.component.scss']
 })
@@ -34,16 +36,19 @@ export class ChoferComponent implements OnInit, OnDestroy {
   pendientes: Ruta[] = [];
   pendienteSeleccionado: Ruta | null = null;
   ubicadasManual = new Set<string>();
+  seleccionManual = new Set<string>();
   candidatosPorPedido = new Map<string, CandidatoGeo[]>();
   private map?: L.Map;
   private capas?: L.LayerGroup;
   private mapaListo = false;
   private paramsSub!: Subscription;
+  private coordsOriginales = new Map<string, { lat: string; lng: string }>();
 
   constructor(
     private api: ApiService,
     private sesion: SesionService,
     private swal: SwalService,
+    private carga: CargandoService,
     private route: ActivatedRoute,
     private router: Router,
     private cdr: ChangeDetectorRef
@@ -121,6 +126,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
   async cargar(): Promise<void> {
     this.cargando = true;
+    this.carga.mostrar('chofer', 'Cargando ruta…');
     try {
       const res = await this.api.get('ruta_completa', { placa: this.placa }, this.sesion.token);
       if (res.success) {
@@ -137,8 +143,15 @@ export class ChoferComponent implements OnInit, OnDestroy {
       this.swal.error('Sin conexión. No se pudo cargar la ruta.');
     } finally {
       this.cargando = false;
+      this.carga.ocultar('chofer');
       this.cdr.detectChanges();
-      if (this.tabActiva === 'manana') this.programarMapa();
+      if (this.tabActiva === 'manana') {
+        try {
+          this.programarMapa();
+        } catch {
+          /* un error del mapa nunca debe bloquear la carga de datos */
+        }
+      }
     }
   }
 
@@ -162,6 +175,91 @@ export class ChoferComponent implements OnInit, OnDestroy {
       const ob = parseInt(b.ordenActual) || 999;
       return oa - ob;
     });
+  }
+
+  get enModoSeleccion(): boolean {
+    return this.modoManual || this.seleccionManual.size > 0;
+  }
+
+  /** Pedidos con ubicación por señalizar/confirmar: los inciertos del auto-ruteo + los elegidos a mano. */
+  get pedidosSeleccion(): Ruta[] {
+    const vistos = new Set<string>();
+    const lista: Ruta[] = [];
+    const agregar = (r: Ruta) => {
+      const k = String(r.pedido);
+      if (vistos.has(k)) return;
+      vistos.add(k);
+      lista.push(r);
+    };
+    this.pendientes.forEach(agregar);
+    this.rutasPlanificadas.forEach(r => { if (this.seleccionManual.has(String(r.pedido))) agregar(r); });
+    return lista;
+  }
+
+  esSeleccionManual(r: Ruta): boolean {
+    return this.seleccionManual.has(String(r.pedido));
+  }
+
+  esPendienteAuto(r: Ruta): boolean {
+    return this.pendientes.some(p => String(p.pedido) === String(r.pedido));
+  }
+
+  /** Guarda las coordenadas previas para poder descartar un ajuste no aplicado. */
+  private recordarCoordenadas(r: Ruta): void {
+    const k = String(r.pedido);
+    if (!this.coordsOriginales.has(k)) {
+      this.coordsOriginales.set(k, { lat: r.lat ?? '', lng: r.lng ?? '' });
+    }
+  }
+
+  /** Quita la selección y devuelve el pedido a su ubicación anterior. */
+  private restaurarSeleccion(r: Ruta): void {
+    const k = String(r.pedido);
+    const original = this.coordsOriginales.get(k);
+    if (original) {
+      r.lat = original.lat;
+      r.lng = original.lng;
+    }
+    this.coordsOriginales.delete(k);
+    this.ubicadasManual.delete(k);
+    this.seleccionManual.delete(k);
+    if (this.pendienteSeleccionado === r) this.pendienteSeleccionado = null;
+  }
+
+  /** Descarta todos los ajustes manuales que aún no se guardaron. */
+  private descartarCambiosManuales(): void {
+    this.coordsOriginales.forEach((coords, pedido) => {
+      const r = this.rutasPlanificadas.find(x => String(x.pedido) === pedido);
+      if (r) {
+        r.lat = coords.lat;
+        r.lng = coords.lng;
+      }
+    });
+    this.coordsOriginales.clear();
+  }
+
+  /** Alterna la selección manual de un pedido (aunque ya esté auto-ubicado). */
+  seleccionarPedido(r: Ruta): void {
+    const k = String(r.pedido);
+    if (this.seleccionManual.has(k)) {
+      this.restaurarSeleccion(r);
+    } else {
+      this.recordarCoordenadas(r);
+      this.seleccionManual.add(k);
+      this.pendienteSeleccionado = r;
+      if (!this.mostrarMapa) {
+        this.mostrarMapa = true;
+        setTimeout(() => { this.inicializarMapa(); this.renderizarMapa(); }, 0);
+      }
+    }
+    this.cdr.detectChanges();
+    this.renderizarMapa();
+  }
+
+  quitarSeleccion(r: Ruta): void {
+    this.restaurarSeleccion(r);
+    this.cdr.detectChanges();
+    this.renderizarMapa();
   }
 
   setOrden(r: Ruta, valor: string): void {
@@ -192,6 +290,25 @@ export class ChoferComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Indica si hay una ruta numerada que se pueda invertir. */
+  get puedeInvertirRuta(): boolean {
+    if (this.cargando || this.autoRuteando || this.enModoSeleccion) return false;
+    return this.rutasPlanificadas.filter(r => parseInt(r.ordenActual, 10) > 0).length >= 2;
+  }
+
+  /** Invierte el orden de los pedidos ya numerados y los renumera 1..N. */
+  invertirRuta(): void {
+    if (!this.puedeInvertirRuta) return;
+
+    const ordenadas = this.rutasPlanificadas
+      .filter(r => parseInt(r.ordenActual, 10) > 0)
+      .sort((a, b) => parseInt(a.ordenActual, 10) - parseInt(b.ordenActual, 10));
+
+    ordenadas.reverse().forEach((r, i) => { r.ordenActual = String(i + 1); });
+    this.cdr.detectChanges();
+    this.renderizarMapa();
+  }
+
   private programarMapa(): void {
     this.mostrarMapa = this.rutasPlanificadas.some(r => r.lat && r.lng);
     this.cdr.detectChanges();
@@ -204,9 +321,20 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
   private inicializarMapa(): void {
     const el = document.getElementById('mapaRuta');
-    if (!el || (this.mapaListo && this.map)) return;
+    if (!el) return;
 
-    this.map = L.map('mapaRuta', { scrollWheelZoom: false });
+    // Al cambiar de pestaña Angular destruye y recrea el contenedor del mapa.
+    // Si el mapa anterior quedó vivo, hay que descartarlo antes de inicializar
+    // el nuevo; de lo contrario Leaflet sigue dibujando sobre un nodo huérfano.
+    if (this.map && this.map.getContainer() === el) return;
+    if (this.map) {
+      this.map.remove();
+      this.map = undefined;
+      this.capas = undefined;
+      this.mapaListo = false;
+    }
+
+    this.map = L.map(el, { scrollWheelZoom: false });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(this.map);
@@ -215,11 +343,13 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
     // Colocar manualmente el punto pendiente seleccionado con un clic en el mapa
     this.map.on('click', (ev: L.LeafletMouseEvent) => {
-      if (!this.modoManual || !this.pendienteSeleccionado) return;
+      if (!this.enModoSeleccion || !this.pendienteSeleccionado) return;
       const r = this.pendienteSeleccionado;
+      this.recordarCoordenadas(r);
       r.lat = String(ev.latlng.lat);
       r.lng = String(ev.latlng.lng);
       this.ubicadasManual.add(String(r.pedido));
+      this.seleccionManual.add(String(r.pedido));
       this.pendienteSeleccionado = null;
       this.cdr.detectChanges();
       this.renderizarMapa();
@@ -249,12 +379,16 @@ export class ChoferComponent implements OnInit, OnDestroy {
     const baseMarker = L.marker([baseLat, baseLng], { icon: baseIcon }).addTo(capas);
     baseMarker.bindPopup('<b>Base / Almacén</b><br>Colchones Forli');
 
-    const conOrden = [...puntos]
+    const esManual = (r: Ruta) => (this.modoManual && this.pendientes.some(p => String(p.pedido) === String(r.pedido)))
+      || this.seleccionManual.has(String(r.pedido));
+
+    const ordenados = [...puntos]
       .filter(r => r.ordenActual && r.ordenActual.trim() !== '')
       .sort((a, b) => (parseInt(a.ordenActual, 10) || 999) - (parseInt(b.ordenActual, 10) || 999));
-    const sinOrden = puntos.filter(r => !r.ordenActual || r.ordenActual.trim() === '');
+    const manuales = puntos.filter(esManual);
+    const sinOrden = puntos.filter(r => (!r.ordenActual || r.ordenActual.trim() === '') && !esManual(r));
 
-    conOrden.forEach(r => {
+    ordenados.filter(r => !esManual(r)).forEach(r => {
       const destacado = distritoSel !== 'ALL' && r.distrito === distritoSel;
       const icon = L.divIcon({
         className: 'punto-mapa' + (destacado ? ' punto-mapa--destacado' : ''),
@@ -266,31 +400,31 @@ export class ChoferComponent implements OnInit, OnDestroy {
       m.bindPopup(`<b>${r.ordenActual}. ${this.esc(r.cliente)}</b><br>Ped: ${this.esc(r.pedido)}<br>${this.esc(r.direccion)}<br>${this.esc(r.distrito)}`);
     });
 
+    manuales.forEach(r => {
+      const ubicada = this.ubicadasManual.has(String(r.pedido));
+      const etiqueta = r.ordenActual && r.ordenActual.trim() !== '' ? r.ordenActual : (ubicada ? '✓' : '?');
+      const icon = L.divIcon({
+        className: 'punto-mapa punto-mapa--pendiente' + (ubicada ? ' punto-mapa--manual' : ''),
+        html: `<span>${etiqueta}</span>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+      const m = L.marker([parseFloat(r.lat!), parseFloat(r.lng!)], { icon, draggable: true });
+      m.on('dragend', (ev: any) => {
+        const ll = ev.target.getLatLng();
+        this.recordarCoordenadas(r);
+        r.lat = String(ll.lat);
+        r.lng = String(ll.lng);
+        this.ubicadasManual.add(String(r.pedido));
+        this.seleccionManual.add(String(r.pedido));
+        this.cdr.detectChanges();
+        this.renderizarMapa();
+      });
+      m.addTo(capas);
+      m.bindPopup(`<b>${this.esc(r.cliente)}</b><br>Ped: ${this.esc(r.pedido)}<br>${this.esc(r.direccion)}<br>${this.esc(r.distrito)}`);
+    });
+
     sinOrden.forEach(r => {
-      const esPendiente = this.modoManual && this.pendientes.some(p => String(p.pedido) === String(r.pedido));
-
-      if (esPendiente) {
-        const ubicada = this.ubicadasManual.has(String(r.pedido));
-        const icon = L.divIcon({
-          className: 'punto-mapa punto-mapa--pendiente' + (ubicada ? ' punto-mapa--manual' : ''),
-          html: `<span>${ubicada ? '✓' : '?'}</span>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
-        });
-        const m = L.marker([parseFloat(r.lat!), parseFloat(r.lng!)], { icon, draggable: true });
-        m.on('dragend', (ev: any) => {
-          const ll = ev.target.getLatLng();
-          r.lat = String(ll.lat);
-          r.lng = String(ll.lng);
-          this.ubicadasManual.add(String(r.pedido));
-          this.cdr.detectChanges();
-          this.renderizarMapa();
-        });
-        m.addTo(capas);
-        m.bindPopup(`<b>${this.esc(r.cliente)}</b> — no ubicada<br>Ped: ${this.esc(r.pedido)}<br>${this.esc(r.direccion)}<br>${this.esc(r.distrito)}`);
-        return;
-      }
-
       const destacado = distritoSel !== 'ALL' && r.distrito === distritoSel;
       const icon = L.divIcon({
         className: 'punto-mapa punto-mapa--sin' + (destacado ? ' punto-mapa--destacado' : ''),
@@ -301,9 +435,9 @@ export class ChoferComponent implements OnInit, OnDestroy {
       L.marker([parseFloat(r.lat!), parseFloat(r.lng!)], { icon }).addTo(capas);
     });
 
-    const pts: [number, number][] = [[baseLat, baseLng], ...conOrden.map(r => [parseFloat(r.lat!), parseFloat(r.lng!)] as [number, number])];
+    const pts: [number, number][] = [[baseLat, baseLng], ...ordenados.map(r => [parseFloat(r.lat!), parseFloat(r.lng!)] as [number, number])];
     for (let i = 0; i < pts.length - 1; i++) {
-      const destino = conOrden[i];
+      const destino = ordenados[i];
       const destacado = distritoSel !== 'ALL' && destino.distrito === distritoSel;
       L.polyline([pts[i], pts[i + 1]], {
         color: destacado ? '#E53935' : '#1565C0',
@@ -382,16 +516,20 @@ export class ChoferComponent implements OnInit, OnDestroy {
   /** Geocodifica lo que falte y genera el orden de entregas por GPS desde la base. */
   async autoRutear(): Promise<void> {
     if (this.autoRuteando) return;
+    // Un auto-ruteo parte de las ubicaciones del backend; descarta ajustes
+    // manuales que aún no se aplicaron para no mezclar estados.
+    this.resetearManual();
     const sinUbicar = this.rutasPlanificadas.filter(r => !r.lat || !r.lng);
     let resumenGeo: any = null;
 
     if (sinUbicar.length > 0) {
       this.autoRuteando = true;
-      this.swal.cargando(true, 'Ubicando direcciones con GPS...');
+      this.carga.mostrar('chofer', 'Ubicando direcciones con GPS…');
       try {
         const res = await this.api.post('geocodificar', { placa: this.placa }, this.sesion.token);
-        this.swal.cargando(false);
+        this.carga.ocultar('chofer');
         this.autoRuteando = false;
+        this.cdr.detectChanges();
         if (!res?.success) {
           this.swal.error(res?.msg || 'No se pudieron ubicar las direcciones. Revisa que Maps esté autorizado en Apps Script.');
           return;
@@ -399,8 +537,9 @@ export class ChoferComponent implements OnInit, OnDestroy {
         resumenGeo = res;
         await this.cargar();
       } catch {
-        this.swal.cargando(false);
+        this.carga.ocultar('chofer');
         this.autoRuteando = false;
+        this.cdr.detectChanges();
         this.swal.error('Sin conexión. No se pudo geocodificar.');
         return;
       }
@@ -461,27 +600,34 @@ export class ChoferComponent implements OnInit, OnDestroy {
     }
 
     this.cdr.detectChanges();
-    this.renderizarMapa();
+    try {
+      this.renderizarMapa();
+    } catch {
+      /* ignorar errores de render del mapa */
+    }
   }
 
-  /** Guarda las ubicaciones manuales y asigna el orden. */
+  /** Guarda las ubicaciones manuales (pendientes + seleccionadas a mano) y asigna el orden. */
   async confirmarOrdenar(): Promise<void> {
-    const manuales = this.pendientes
-      .filter(r => r.lat && r.lng)
-      .map(r => ({ filas: r.filas, lat: r.lat, lng: r.lng }));
+    const seleccion = this.pedidosSeleccion.filter(r => r.lat && r.lng);
+    const manuales = seleccion.map(r => ({ filas: r.filas, lat: r.lat, lng: r.lng }));
+    // Snapshot para re-aplicar tras la recarga: la hoja puede devolver datos cacheados
+    // (ScriptCache 120 s) o descartar coords fuera de rango, dejando los manuales sin ruta.
+    const snapshot = seleccion.map(r => ({ pedido: String(r.pedido), lat: r.lat as string, lng: r.lng as string }));
 
     if (manuales.length > 0) {
-      this.swal.cargando(true, 'Guardando ubicaciones...');
+      this.carga.mostrar('chofer', 'Guardando ubicaciones…');
       try {
         const res = await this.api.post('guardar_ubicacion_manual', { placa: this.placa, manuales }, this.sesion.token);
-        this.swal.cargando(false);
+        this.carga.ocultar('chofer');
         if (!res?.success) {
           this.swal.error(res?.msg || 'No se pudieron guardar las ubicaciones.');
           return;
         }
         await this.cargar();
+        this.reaplicarManuales(snapshot);
       } catch {
-        this.swal.cargando(false);
+        this.carga.ocultar('chofer');
         this.swal.error('Sin conexión. No se pudo guardar.');
         return;
       }
@@ -491,16 +637,31 @@ export class ChoferComponent implements OnInit, OnDestroy {
     this.pendientes = [];
     this.pendienteSeleccionado = null;
     this.ubicadasManual = new Set<string>();
+    this.seleccionManual = new Set<string>();
     this.candidatosPorPedido = new Map<string, CandidatoGeo[]>();
+    this.coordsOriginales.clear();
     this.asignarOrden();
+  }
+
+  /** Restaura las coordenadas manuales sobre las filas recargadas (por pedido). */
+  private reaplicarManuales(coords: { pedido: string; lat: string; lng: string }[]): void {
+    coords.forEach(c => {
+      const r = this.rutasPlanificadas.find(x => String(x.pedido) === c.pedido);
+      if (r) {
+        r.lat = c.lat;
+        r.lng = c.lng;
+      }
+    });
   }
 
   /** Asigna el orden dejando las pendientes sin ubicar sin número. */
   omitirOrdenar(): void {
+    this.descartarCambiosManuales();
     this.modoManual = false;
     this.pendientes = [];
     this.pendienteSeleccionado = null;
     this.ubicadasManual = new Set<string>();
+    this.seleccionManual = new Set<string>();
     this.candidatosPorPedido = new Map<string, CandidatoGeo[]>();
     this.asignarOrden();
   }
@@ -518,9 +679,11 @@ export class ChoferComponent implements OnInit, OnDestroy {
   }
 
   elegirCandidato(r: Ruta, cand: CandidatoGeo): void {
+    this.recordarCoordenadas(r);
     r.lat = String(cand.lat);
     r.lng = String(cand.lng);
     this.ubicadasManual.add(String(r.pedido));
+    this.seleccionManual.add(String(r.pedido));
     this.pendienteSeleccionado = null;
     this.cdr.detectChanges();
     this.renderizarMapa();
@@ -531,10 +694,12 @@ export class ChoferComponent implements OnInit, OnDestroy {
   }
 
   private resetearManual(): void {
+    this.descartarCambiosManuales();
     this.modoManual = false;
     this.pendientes = [];
     this.pendienteSeleccionado = null;
     this.ubicadasManual = new Set<string>();
+    this.seleccionManual = new Set<string>();
     this.candidatosPorPedido = new Map<string, CandidatoGeo[]>();
   }
 
@@ -548,14 +713,18 @@ export class ChoferComponent implements OnInit, OnDestroy {
     }
     const ok = await this.swal.confirmar('¿Guardar ordenamiento?', 'Se registrará este orden en el sistema.', 'info', 'Sí, guardar');
     if (!ok) return;
-    this.swal.cargando(true);
+    this.carga.mostrar('chofer', 'Guardando orden…');
     try {
       const res = await this.api.post('guardar_orden', { token: this.sesion.token, placa: this.placa, ordenes: datos });
-      this.swal.cargando(false);
-      if (res.success) this.swal.exito('¡Excelente! Orden guardado correctamente.');
-      else this.swal.error((res.error as string) || 'Error al guardar.');
+      this.carga.ocultar('chofer');
+      if (res.success) {
+        this.swal.exito('¡Excelente! Orden guardado correctamente.');
+        if (this.esAdmin) {
+          void this.router.navigate(['/admin'], { queryParams: { vista: 'manana' } });
+        }
+      } else this.swal.error((res.error as string) || 'Error al guardar.');
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('chofer');
       this.swal.error('Sin conexión. No se pudo guardar.');
     }
   }

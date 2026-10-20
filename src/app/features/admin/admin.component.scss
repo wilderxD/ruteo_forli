@@ -4,3 +4,54 @@
 .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 input:checked + .slider { background-color: var(--forli); }
 input:checked + .slider:before { transform: translateX(24px); }
+
+:host ::ng-deep .leaflet-container {
+  z-index: 0;
+}
+
+:host ::ng-deep .punto-mapa-admin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #1565c0;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  font-family: inherit;
+
+  &.punto-mapa-admin--base {
+    background: #2e7d32;
+    font-size: 14px;
+  }
+
+  &.punto-mapa-admin--sin {
+    background: #9e9e9e;
+    font-size: 16px;
+    line-height: 1;
+  }
+}
+
+:host ::ng-deep .tooltip-ruta-admin {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 280px;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 8px 10px;
+}
+
+:host ::ng-deep .mapa-ruta-info {
+  overflow-wrap: anywhere;
+}
+
+:host ::ng-deep .mapa-ruta-info__titulo {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+:host ::ng-deep .mapa-ruta-info div {
+  margin-top: 1px;
+}

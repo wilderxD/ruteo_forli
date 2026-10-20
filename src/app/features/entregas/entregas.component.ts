@@ -4,18 +4,21 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
+import { CargandoService } from '../../shared/services/cargando.service';
+import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 import { RegistroEntrega } from '../../core/models';
 
 @Component({
   selector: 'app-entregas',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
   templateUrl: './entregas.component.html',
   styleUrls: ['./entregas.component.scss']
 })
 export class EntregasComponent implements OnInit {
   registros: RegistroEntrega[] = [];
   placas: string[] = [];
+  cargando = false;
   filtroPlaca = '';
   fechaDesde = '';
   fechaHasta = '';
@@ -25,6 +28,7 @@ export class EntregasComponent implements OnInit {
     private api: ApiService,
     private sesion: SesionService,
     private swal: SwalService,
+    private carga: CargandoService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -74,7 +78,9 @@ export class EntregasComponent implements OnInit {
   }
 
   async cargar(): Promise<void> {
-    this.swal.cargando(true);
+    this.cargando = true;
+    this.carga.mostrar('entregas', 'Cargando entregas…');
+    this.cdr.detectChanges();
     try {
       const res = await this.api.get('entregas_admin', {
         placa: this.filtroPlaca,
@@ -89,7 +95,9 @@ export class EntregasComponent implements OnInit {
     } catch {
       this.swal.error('Sin conexión.');
     } finally {
-      this.swal.cargando(false);
+      this.cargando = false;
+      this.carga.ocultar('entregas');
+      this.cdr.detectChanges();
     }
   }
 
@@ -114,7 +122,7 @@ export class EntregasComponent implements OnInit {
   }
 
   async descargarZip(): Promise<void> {
-    this.swal.cargando(true);
+    this.carga.mostrar('entregas', 'Generando ZIP de fotos…');
     try {
       const res = await this.api.get('fotos_zip', {
         placa: this.filtroPlaca,
@@ -141,7 +149,7 @@ export class EntregasComponent implements OnInit {
     } catch {
       this.swal.error('Sin conexión.');
     } finally {
-      this.swal.cargando(false);
+      this.carga.ocultar('entregas');
     }
   }
 }

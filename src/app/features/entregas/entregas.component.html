@@ -30,13 +30,15 @@
   </div>
 </div>
 
-<div *ngIf="registros.length === 0" class="text-center py-12 mt-4">
+<app-progreso-seccion clave="entregas"></app-progreso-seccion>
+
+<div *ngIf="!cargando && registros.length === 0" class="text-center py-12 mt-4">
   <div class="bg-white rounded-lg p-8 text-[#5B403D] border border-dashed border-[#E0E0E0] inline-block">
     <i class="fas fa-camera-retro text-4xl mb-3 block"></i>No hay entregas registradas con estos filtros.
   </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+<div *ngIf="!cargando" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
   <div *ngFor="let r of registros" (click)="abrirDetalle(r)" class="bg-white rounded-lg border border-[#E0E0E0] p-4 shadow-sm hover:shadow-md transition-all cursor-pointer card-hover">
     <div class="flex justify-between items-start mb-2">
       <h5 class="font-bold text-slate-800 text-sm">{{ r.cliente }}</h5>

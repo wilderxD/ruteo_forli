@@ -5,18 +5,21 @@ import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
 import { ExcelService } from '../../shared/services/excel.service';
+import { CargandoService } from '../../shared/services/cargando.service';
+import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 import { DatosSoporte, RegistroSoporte } from '../../core/models';
 
 @Component({
   selector: 'app-soporte',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
   templateUrl: './soporte.component.html',
   styleUrls: ['./soporte.component.scss']
 })
 export class SoporteComponent implements OnInit {
   datos: DatosSoporte | null = null;
   registros: RegistroSoporte[] = [];
+  cargando = false;
   query = '';
   filtroPlaca = 'ALL';
   filtroDistrito = 'ALL';
@@ -34,6 +37,7 @@ export class SoporteComponent implements OnInit {
     private sesion: SesionService,
     private swal: SwalService,
     private excel: ExcelService,
+    private carga: CargandoService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -62,7 +66,9 @@ export class SoporteComponent implements OnInit {
   }
 
   async cargar(): Promise<void> {
-    this.swal.cargando(true);
+    this.cargando = true;
+    this.carga.mostrar('soporte', 'Cargando atenciones de soporte…');
+    this.cdr.detectChanges();
     try {
       const res = await this.api.get('soporte', {}, this.token);
       if (res.success) {
@@ -75,7 +81,9 @@ export class SoporteComponent implements OnInit {
     } catch {
       this.swal.error('Sin conexión.');
     } finally {
-      this.swal.cargando(false);
+      this.cargando = false;
+      this.carga.ocultar('soporte');
+      this.cdr.detectChanges();
     }
   }
 
@@ -98,10 +106,12 @@ export class SoporteComponent implements OnInit {
     this.edAtc = r.codigoAtc;
     this.edMotivo = r.motivo;
     this.edObs = r.observacionesSoporte;
+    this.cdr.detectChanges();
   }
 
   cerrarDetalle(): void {
     this.editando = null;
+    this.cdr.detectChanges();
   }
 
   numerosWsp(num: string): string[] {
@@ -111,7 +121,7 @@ export class SoporteComponent implements OnInit {
 
   async guardar(): Promise<void> {
     if (!this.editando) return;
-    this.swal.cargando(true);
+    this.carga.mostrar('soporte', 'Guardando soporte…');
     try {
       const res = await this.api.post('guardar_soporte', {
         fila: this.editando.fila,
@@ -121,14 +131,14 @@ export class SoporteComponent implements OnInit {
         obs: this.edObs,
         motivo: this.edMotivo
       }, this.token);
-      this.swal.cargando(false);
+      this.carga.ocultar('soporte');
       if (res.success) {
         this.swal.exito('Soporte de atención guardado de forma exitosa.');
         this.cerrarDetalle();
         await this.cargar();
       } else this.swal.error((res.error as string) || 'Error al guardar.');
     } catch {
-      this.swal.cargando(false);
+      this.carga.ocultar('soporte');
       this.swal.error('Sin conexión.');
     }
   }
