@@ -5,12 +5,11 @@ import { AuthService } from '../../core/services/auth.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { ApiService } from '../../core/services/api.service';
 import { CargandoService } from '../../shared/services/cargando.service';
-import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [RouterOutlet, CommonModule, ProgresoSeccionComponent],
+  imports: [RouterOutlet, CommonModule],
   templateUrl: './layout.component.html',
   styleUrls: ['./layout.component.scss']
 })

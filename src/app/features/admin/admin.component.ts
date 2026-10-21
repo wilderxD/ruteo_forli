@@ -10,12 +10,11 @@ import { SwalService } from '../../shared/services/swal.service';
 import { EstadoAdmin, EstadoPlaca, DatosAsignacion, DatosExcel, Usuario, Ruta, RutaCompleta } from '../../core/models';
 import { ExcelService } from '../../shared/services/excel.service';
 import { CargandoService } from '../../shared/services/cargando.service';
-import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './admin.component.html',
   styleUrls: ['./admin.component.scss']
 })
@@ -274,7 +273,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     });
     const contenido = this.contenidoMapaRuta(r);
     const marcador = L.marker([parseFloat(r.lat!), parseFloat(r.lng!)], { icon, riseOnHover: true });
-    marcador.bindTooltip(contenido, {
+    marcador.bindTooltip(this.contenidoTooltipRuta(r), {
       direction: 'top',
       offset: [0, -12],
       opacity: 1,
@@ -294,6 +293,13 @@ export class AdminComponent implements OnInit, OnDestroy {
       <div><b>Distrito:</b> ${this.esc(r.distrito || '—')}</div>
       <div><b>Pedido:</b> ${this.esc(r.pedido || '—')}</div>
       <div><b>Producto:</b> ${this.esc(r.modelo || '—')}</div>
+    </div>`;
+  }
+
+  private contenidoTooltipRuta(r: Ruta): string {
+    return `<div class="mapa-ruta-tooltip">
+      <div class="mapa-ruta-tooltip__cliente">${this.esc(r.cliente || 'Sin cliente')}</div>
+      <div class="mapa-ruta-tooltip__direccion">${this.esc(r.direccion || 'Sin dirección')}</div>
     </div>`;
   }
 

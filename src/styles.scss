@@ -94,6 +94,10 @@
 }
 .sello span { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em; margin-bottom: 2px; opacity: 0.7; }
 
+body.carga-overlay-activa {
+  overflow: hidden;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

@@ -37,10 +37,25 @@ input:checked + .slider:before { transform: translateX(24px); }
 :host ::ng-deep .tooltip-ruta-admin {
   white-space: normal;
   overflow-wrap: anywhere;
-  max-width: 280px;
+  max-width: 220px;
   font-size: 12px;
   line-height: 1.35;
-  padding: 8px 10px;
+  padding: 6px 9px;
+  text-align: left;
+}
+
+:host ::ng-deep .mapa-ruta-tooltip {
+  display: flex;
+  flex-direction: column;
+}
+
+:host ::ng-deep .mapa-ruta-tooltip__cliente {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+:host ::ng-deep .mapa-ruta-tooltip__direccion {
+  color: #475569;
 }
 
 :host ::ng-deep .mapa-ruta-info {

@@ -8,13 +8,12 @@ import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
 import { CargandoService } from '../../shared/services/cargando.service';
-import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 import { Ruta, RutaCompleta, CandidatoGeo } from '../../core/models';
 
 @Component({
   selector: 'app-chofer',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './chofer.component.html',
   styleUrls: ['./chofer.component.scss']
 })

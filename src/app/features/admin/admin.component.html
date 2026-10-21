@@ -32,8 +32,6 @@
   </div>
 </div>
 
-<app-progreso-seccion clave="admin"></app-progreso-seccion>
-
 <div class="flex justify-between items-center mb-4">
   <button (click)="cargarAdmin()" class="text-sm text-[#5B403D] hover:text-[#D32F2F] transition font-medium btn-ghost">
     <i class="fas fa-sync-alt mr-1"></i> Refrescar Panel
@@ -97,12 +95,6 @@
     </div>
 
     <div class="relative flex-1 min-h-[260px] bg-[#F8F9FA]">
-      <div *ngIf="cargandoMapa" class="absolute inset-0 z-10 flex items-center justify-center bg-white">
-        <div class="w-full max-w-sm px-4">
-          <app-progreso-seccion clave="admin-mapa"></app-progreso-seccion>
-        </div>
-      </div>
-
       <div *ngIf="!cargandoMapa && errorMapa" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white p-6 text-center">
         <i class="fas fa-triangle-exclamation text-3xl text-[#D32F2F]"></i>
         <p class="text-sm text-slate-600">{{ errorMapa }}</p>
@@ -162,7 +154,6 @@
       </div>
       <div class="border-t border-[#E0E0E0] pt-3">
         <p class="text-xs text-slate-500 mb-2">{{ usuarios.length }} {{ usuarios.length === 1 ? 'usuario' : 'usuarios' }}</p>
-        <app-progreso-seccion clave="admin-usuarios" [compacto]="true"></app-progreso-seccion>
         <div class="overflow-x-auto max-h-72 overflow-y-auto">
           <table class="w-full text-sm">
             <thead><tr class="text-left text-slate-500 border-b border-[#E0E0E0]"><th class="py-1 pr-2">Usuario</th><th class="py-1 pr-2">Nombre</th><th class="py-1 pr-2">Rol</th><th class="py-1 pr-2">Estado</th><th class="py-1">Acciones</th></tr></thead>

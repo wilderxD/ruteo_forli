@@ -5,12 +5,11 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { CargandoService } from '../../shared/services/cargando.service';
-import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss']
 })

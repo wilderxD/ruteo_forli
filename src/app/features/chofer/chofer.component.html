@@ -32,7 +32,6 @@
       <option *ngFor="let d of opcionesDistritoHoy" [value]="d">{{ d }}</option>
     </select>
   </div>
-  <app-progreso-seccion clave="chofer"></app-progreso-seccion>
   <div *ngIf="!cargando && filtrarHoy().length === 0" class="bg-slate-50 rounded-lg p-6 text-center text-slate-500">Sin asignaciones para hoy.</div>
   <div *ngIf="!cargando && filtrarHoy().length > 0" class="space-y-3">
   <div *ngFor="let r of filtrarHoy()" class="bg-white rounded-lg border border-[#E0E0E0] border-l-4 border-l-[#D32F2F] shadow-sm card-hover">
@@ -93,7 +92,6 @@
       </button>
     </div>
   </div>
-  <app-progreso-seccion clave="chofer"></app-progreso-seccion>
   <div *ngIf="mostrarMapa" class="rounded-lg overflow-hidden border border-[#E0E0E0] shadow-sm">
     <div id="mapaRuta" class="h-[300px] w-full z-0"></div>
   </div>

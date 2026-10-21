@@ -6,13 +6,12 @@ import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
 import { ExcelService } from '../../shared/services/excel.service';
 import { CargandoService } from '../../shared/services/cargando.service';
-import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 import { DatosSoporte, RegistroSoporte } from '../../core/models';
 
 @Component({
   selector: 'app-soporte',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './soporte.component.html',
   styleUrls: ['./soporte.component.scss']
 })

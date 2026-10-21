@@ -5,13 +5,12 @@ import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
 import { CargandoService } from '../../shared/services/cargando.service';
-import { ProgresoSeccionComponent } from '../../shared/components/progreso-seccion/progreso-seccion.component';
 import { RegistroEntrega } from '../../core/models';
 
 @Component({
   selector: 'app-entregas',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProgresoSeccionComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './entregas.component.html',
   styleUrls: ['./entregas.component.scss']
 })

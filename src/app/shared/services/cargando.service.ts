@@ -5,14 +5,15 @@ export interface CargandoEstado {
   activo: boolean;
   porcentaje: number;
   texto: string;
+  /** Orden de la última operación que tomó el control del overlay global. */
+  prioridad: number;
 }
 
 /**
- * Estado de carga por sección (clave), para mostrar un indicador inline con
- * porcentaje. Como una petición fetch a Apps Script no expone progreso real,
- * cuando no se indica un porcentaje la barra avanza de forma simulada hasta 90%
- * y salta a 100% al ocultarse. En flujos por pasos se usa `progreso()` con el
- * valor real.
+ * Estado de carga por sección (clave), consumido por el overlay global.
+ * Como una petición fetch a Apps Script no expone progreso real, cuando no se
+ * indica un porcentaje la barra avanza de forma simulada hasta 90% y salta a
+ * 100% al ocultarse. En flujos por pasos se usa `progreso()` con el valor real.
  */
 @Injectable({ providedIn: 'root' })
 export class CargandoService {
@@ -20,14 +21,20 @@ export class CargandoService {
   private refs = new Map<string, number>();
   private timers = new Map<string, ReturnType<typeof setInterval>>();
   private subject = new BehaviorSubject<Map<string, CargandoEstado>>(new Map());
+  private prioridadSeq = 0;
 
   readonly cambios$: Observable<Map<string, CargandoEstado>> = this.subject.asObservable();
 
   mostrar(clave: string, texto = 'Cargando…', porcentaje?: number): void {
     this.refs.set(clave, (this.refs.get(clave) ?? 0) + 1);
     const prev = this.estados.get(clave);
-    const pct = porcentaje ?? (prev?.activo ? Math.max(prev.porcentaje, 5) : 5);
-    this.set(clave, { activo: true, porcentaje: this.limitar(pct), texto });
+    const pct = porcentaje ?? (prev?.activo && prev.porcentaje < 100 ? Math.max(prev.porcentaje, 5) : 5);
+    this.set(clave, {
+      activo: true,
+      porcentaje: this.limitar(pct),
+      texto,
+      prioridad: ++this.prioridadSeq
+    });
     if (porcentaje == null) this.animar(clave);
   }
 
@@ -37,7 +44,8 @@ export class CargandoService {
     this.set(clave, {
       activo: true,
       porcentaje: this.limitar(porcentaje),
-      texto: texto ?? prev?.texto ?? 'Cargando…'
+      texto: texto ?? prev?.texto ?? 'Cargando…',
+      prioridad: prev?.prioridad ?? ++this.prioridadSeq
     });
   }
 
