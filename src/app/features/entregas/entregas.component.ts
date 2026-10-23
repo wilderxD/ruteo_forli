@@ -22,6 +22,7 @@ export class EntregasComponent implements OnInit {
   fechaDesde = '';
   fechaHasta = '';
   detalle: RegistroEntrega | null = null;
+  vista: 'tarjetas' | 'lista' = 'tarjetas';
 
   constructor(
     private api: ApiService,
@@ -113,6 +114,12 @@ export class EntregasComponent implements OnInit {
 
   cerrarDetalle(): void {
     this.detalle = null;
+    this.cdr.detectChanges();
+  }
+
+  cambiarVista(vista: 'tarjetas' | 'lista'): void {
+    if (this.vista === vista) return;
+    this.vista = vista;
     this.cdr.detectChanges();
   }
 
