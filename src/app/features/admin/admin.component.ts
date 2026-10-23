@@ -523,16 +523,40 @@ export class AdminComponent implements OnInit, OnDestroy {
       'Sí, mover'
     );
     if (!ok) return;
-    this.carga.mostrar('admin', 'Moviendo rutas a HOY…');
+    await this.ejecutarMoverRutas(false);
+  }
+
+  private async ejecutarMoverRutas(forzar: boolean): Promise<void> {
+    this.carga.mostrar('admin', forzar ? 'Forzando movimiento de rutas…' : 'Moviendo rutas a HOY…');
     try {
-      const res = await this.api.post('mover_rutas', {}, this.token);
+      const res = await this.api.post('mover_rutas', forzar ? { forzar: true } : {}, this.token);
       this.carga.ocultar('admin');
-      if (res.success) {
-        this.swal.exito((res.message as string) || 'Rutas movidas.');
-        this.esManana = false;
-        this.actualizarVistaUrl();
-        await this.cargarAdmin();
-      } else this.swal.error((res.error as string) || 'Error.');
+      if (!res?.success) {
+        this.swal.error((res?.error as string) || 'Error.');
+        return;
+      }
+
+      // La fecha no coincide: se pide una segunda confirmación antes de forzar.
+      if (res.movido === false && res.requiereForzar === true && !forzar) {
+        const confirmar = await this.swal.confirmar(
+          'La fecha no coincide',
+          `${res.message || 'La ruta no corresponde al día de hoy.'} ¿Deseas forzar el movimiento?`,
+          'warning',
+          'Sí, forzar'
+        );
+        if (confirmar) await this.ejecutarMoverRutas(true);
+        return;
+      }
+
+      if (res.movido === false) {
+        this.swal.aviso((res.message as string) || 'No se movió ninguna ruta.', 'warning');
+        return;
+      }
+
+      this.swal.exito((res.message as string) || 'Rutas movidas.');
+      this.esManana = false;
+      this.actualizarVistaUrl();
+      await this.cargarAdmin();
     } catch {
       this.carga.ocultar('admin');
       this.swal.error('Sin conexión.');

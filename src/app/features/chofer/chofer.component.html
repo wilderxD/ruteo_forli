@@ -72,7 +72,7 @@
   <div class="flex flex-col sm:flex-row gap-2">
     <div class="relative sm:flex-1 sm:min-w-[180px]">
       <i class="fas fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-[#F57C00] text-sm"></i>
-      <select [(ngModel)]="distritoManana" (ngModelChange)="renderizarMapa()" class="campo w-full pl-10 pr-4 py-2.5 text-sm bg-white focus:border-[#D32F2F]">
+      <select [(ngModel)]="distritoManana" (ngModelChange)="renderizarMapa(true)" class="campo w-full pl-10 pr-4 py-2.5 text-sm bg-white focus:border-[#D32F2F]">
         <option value="ALL">📌 Todos los distritos ({{ rutasPlanificadas.length }})</option>
         <option *ngFor="let d of opcionesDistritoManana" [value]="d">{{ d }}</option>
       </select>

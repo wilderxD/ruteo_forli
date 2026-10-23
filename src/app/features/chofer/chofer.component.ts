@@ -61,6 +61,19 @@ export class ChoferComponent implements OnInit, OnDestroy {
     return d.innerHTML;
   }
 
+  /** Convierte una coordenada a número, tolerando coma decimal. El backend
+   *  ya entrega siempre el valor normalizado con punto. */
+  private coordNumero(v: string | null | undefined): number {
+    if (v == null || v === '') return NaN;
+    const s = String(v).trim().replace(',', '.');
+    const n = Number(s);
+    return isFinite(n) ? n : NaN;
+  }
+
+  private tieneCoordenada(r: Ruta): boolean {
+    return Number.isFinite(this.coordNumero(r.lat)) && Number.isFinite(this.coordNumero(r.lng));
+  }
+
   get placa(): string {
     return this.sesion.placa;
   }
@@ -248,17 +261,17 @@ export class ChoferComponent implements OnInit, OnDestroy {
       this.pendienteSeleccionado = r;
       if (!this.mostrarMapa) {
         this.mostrarMapa = true;
-        setTimeout(() => { this.inicializarMapa(); this.renderizarMapa(); }, 0);
+        setTimeout(() => { this.inicializarMapa(); this.renderizarMapa(true); }, 0);
       }
     }
     this.cdr.detectChanges();
-    this.renderizarMapa();
+    this.renderizarMapa(false);
   }
 
   quitarSeleccion(r: Ruta): void {
     this.restaurarSeleccion(r);
     this.cdr.detectChanges();
-    this.renderizarMapa();
+    this.renderizarMapa(false);
   }
 
   setOrden(r: Ruta, valor: string): void {
@@ -277,7 +290,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
     }
     r.ordenActual = String(n);
     this.cdr.detectChanges();
-    this.renderizarMapa();
+    this.renderizarMapa(false);
   }
 
   async restablecerOrdenes(): Promise<void> {
@@ -285,7 +298,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
     if (ok) {
       this.rutasPlanificadas.forEach(r => r.ordenActual = '');
       this.cdr.detectChanges();
-      this.renderizarMapa();
+      this.renderizarMapa(false);
     }
   }
 
@@ -305,16 +318,16 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
     ordenadas.reverse().forEach((r, i) => { r.ordenActual = String(i + 1); });
     this.cdr.detectChanges();
-    this.renderizarMapa();
+    this.renderizarMapa(false);
   }
 
   private programarMapa(): void {
-    this.mostrarMapa = this.rutasPlanificadas.some(r => r.lat && r.lng);
+    this.mostrarMapa = this.rutasPlanificadas.some(r => this.tieneCoordenada(r));
     this.cdr.detectChanges();
     if (!this.mostrarMapa) return;
     setTimeout(() => {
       this.inicializarMapa();
-      this.renderizarMapa();
+      this.renderizarMapa(true);
     }, 0);
   }
 
@@ -345,26 +358,29 @@ export class ChoferComponent implements OnInit, OnDestroy {
       if (!this.enModoSeleccion || !this.pendienteSeleccionado) return;
       const r = this.pendienteSeleccionado;
       this.recordarCoordenadas(r);
-      r.lat = String(ev.latlng.lat);
-      r.lng = String(ev.latlng.lng);
+      r.lat = String(Number(ev.latlng.lat));
+      r.lng = String(Number(ev.latlng.lng));
       this.ubicadasManual.add(String(r.pedido));
       this.seleccionManual.add(String(r.pedido));
       this.pendienteSeleccionado = null;
       this.cdr.detectChanges();
-      this.renderizarMapa();
+      // No mover la vista: el usuario debe seguir viendo el punto que acaba de colocar.
+      this.renderizarMapa(false);
     });
 
     setTimeout(() => this.map?.invalidateSize(), 0);
   }
 
-  /** Dibuja los puntos de entrega de la placa y la ruta; destaca el distrito filtrado. */
-  renderizarMapa(): void {
+  /** Dibuja los puntos de entrega de la placa y la ruta; destaca el distrito filtrado.
+   *  `ajustarVista` debe ser false al arrastrar/colocar un pin para no devolver
+   *  el mapa a la base después de cada ajuste manual. */
+  renderizarMapa(ajustarVista = false): void {
     if (!this.mapaListo || !this.map || !this.capas) return;
     const capas = this.capas;
     const map = this.map;
     capas.clearLayers();
 
-    const puntos = this.rutasPlanificadas.filter(r => r.lat && r.lng);
+    const puntos = this.rutasPlanificadas.filter(r => this.tieneCoordenada(r));
     const baseLat = parseFloat(this.baseLat) || -11.8297773;
     const baseLng = parseFloat(this.baseLng) || -77.097072;
     const distritoSel = this.distritoManana;
@@ -395,7 +411,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
         iconSize: [26, 26],
         iconAnchor: [13, 13]
       });
-      const m = L.marker([parseFloat(r.lat!), parseFloat(r.lng!)], { icon }).addTo(capas);
+      const m = L.marker([this.coordNumero(r.lat), this.coordNumero(r.lng)], { icon }).addTo(capas);
       m.bindPopup(`<b>${r.ordenActual}. ${this.esc(r.cliente)}</b><br>Ped: ${this.esc(r.pedido)}<br>${this.esc(r.direccion)}<br>${this.esc(r.distrito)}`);
     });
 
@@ -408,16 +424,18 @@ export class ChoferComponent implements OnInit, OnDestroy {
         iconSize: [28, 28],
         iconAnchor: [14, 14]
       });
-      const m = L.marker([parseFloat(r.lat!), parseFloat(r.lng!)], { icon, draggable: true });
+      const m = L.marker([this.coordNumero(r.lat), this.coordNumero(r.lng)], { icon, draggable: true });
       m.on('dragend', (ev: any) => {
         const ll = ev.target.getLatLng();
         this.recordarCoordenadas(r);
-        r.lat = String(ll.lat);
-        r.lng = String(ll.lng);
+        r.lat = String(Number(ll.lat));
+        r.lng = String(Number(ll.lng));
         this.ubicadasManual.add(String(r.pedido));
         this.seleccionManual.add(String(r.pedido));
         this.cdr.detectChanges();
-        this.renderizarMapa();
+        // Conservar el centro y zoom actuales para poder revisar el punto
+        // recién soltado (antes se hacía fitBounds/setView a la base).
+        this.renderizarMapa(false);
       });
       m.addTo(capas);
       m.bindPopup(`<b>${this.esc(r.cliente)}</b><br>Ped: ${this.esc(r.pedido)}<br>${this.esc(r.direccion)}<br>${this.esc(r.distrito)}`);
@@ -431,10 +449,10 @@ export class ChoferComponent implements OnInit, OnDestroy {
         iconSize: [22, 22],
         iconAnchor: [11, 11]
       });
-      L.marker([parseFloat(r.lat!), parseFloat(r.lng!)], { icon }).addTo(capas);
+      L.marker([this.coordNumero(r.lat), this.coordNumero(r.lng)], { icon }).addTo(capas);
     });
 
-    const pts: [number, number][] = [[baseLat, baseLng], ...ordenados.map(r => [parseFloat(r.lat!), parseFloat(r.lng!)] as [number, number])];
+    const pts: [number, number][] = [[baseLat, baseLng], ...ordenados.map(r => [this.coordNumero(r.lat), this.coordNumero(r.lng)] as [number, number])];
     for (let i = 0; i < pts.length - 1; i++) {
       const destino = ordenados[i];
       const destacado = distritoSel !== 'ALL' && destino.distrito === distritoSel;
@@ -445,10 +463,21 @@ export class ChoferComponent implements OnInit, OnDestroy {
       }).addTo(capas);
     }
 
-    if (pts.length > 1) {
-      map.fitBounds(L.latLngBounds(pts.map(p => L.latLng(p[0], p[1]))).pad(0.1));
-    } else {
-      map.setView([baseLat, baseLng], 12);
+    if (ajustarVista) {
+      // Para calcular la vista se incluyen también los pines manuales, no
+      // solo los pedidos ya numerados. Si no, al haber un único pin manual
+      // el mapa se centraba de nuevo en la base.
+      const ptsVista: [number, number][] = [[baseLat, baseLng]];
+      puntos.forEach(r => {
+        const la = this.coordNumero(r.lat);
+        const lo = this.coordNumero(r.lng);
+        if (isFinite(la) && isFinite(lo)) ptsVista.push([la, lo]);
+      });
+      if (ptsVista.length > 1) {
+        map.fitBounds(L.latLngBounds(ptsVista.map(p => L.latLng(p[0], p[1]))).pad(0.1));
+      } else {
+        map.setView([baseLat, baseLng], 12);
+      }
     }
   }
 
@@ -480,7 +509,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
       let mejorDist = Infinity;
       for (const key of grupos.keys()) {
         grupos.get(key)!.forEach(r => {
-          const d = this.haversineKm(lat, lng, parseFloat(r.lat!), parseFloat(r.lng!));
+          const d = this.haversineKm(lat, lng, this.coordNumero(r.lat), this.coordNumero(r.lng));
           if (d < mejorDist) {
             mejorDist = d;
             mejorKey = key;
@@ -495,7 +524,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
         let menor = Infinity;
         for (let i = 0; i < pts.length; i++) {
           const r = pts[i];
-          const d = this.haversineKm(lat, lng, parseFloat(r.lat!), parseFloat(r.lng!));
+          const d = this.haversineKm(lat, lng, this.coordNumero(r.lat), this.coordNumero(r.lng));
           if (d < menor) {
             menor = d;
             mejor = i;
@@ -503,8 +532,8 @@ export class ChoferComponent implements OnInit, OnDestroy {
         }
         const siguiente = pts.splice(mejor, 1)[0];
         ordenadas.push(siguiente);
-        lat = parseFloat(siguiente.lat!);
-        lng = parseFloat(siguiente.lng!);
+        lat = this.coordNumero(siguiente.lat);
+        lng = this.coordNumero(siguiente.lng);
       }
 
       grupos.delete(mejorKey);
@@ -518,7 +547,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
     // Un auto-ruteo parte de las ubicaciones del backend; descarta ajustes
     // manuales que aún no se aplicaron para no mezclar estados.
     this.resetearManual();
-    const sinUbicar = this.rutasPlanificadas.filter(r => !r.lat || !r.lng);
+    const sinUbicar = this.rutasPlanificadas.filter(r => !this.tieneCoordenada(r));
     let resumenGeo: any = null;
 
     if (sinUbicar.length > 0) {
@@ -566,7 +595,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
       this.pendienteSeleccionado = null;
       this.ubicadasManual = new Set<string>();
       this.cdr.detectChanges();
-      this.renderizarMapa();
+      this.renderizarMapa(true);
       this.swal.aviso(
         `${this.pendientes.length} dirección(es) con geolocalización incierta. Elige una coincidencia, arrastra el marcador o usa "Ubicar" y haz clic en el mapa. Luego confirma para asignar el orden.`,
         'warning'
@@ -580,7 +609,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
   /** Ordena por cercanía desde la base y asigna el número de orden 1..N. */
   private asignarOrden(): void {
-    const conUbicacion = this.rutasPlanificadas.filter(r => r.lat && r.lng);
+    const conUbicacion = this.rutasPlanificadas.filter(r => this.tieneCoordenada(r));
     if (conUbicacion.length === 0) {
       this.swal.error('No hay direcciones ubicadas. Verifica los datos de la ruta.');
       return;
@@ -591,7 +620,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
     const ordenadas = this.ordenarPorCercania(conUbicacion, baseLat, baseLng);
     ordenadas.forEach((r, i) => { r.ordenActual = String(i + 1); });
 
-    const sinGeo = this.rutasPlanificadas.filter(r => !r.lat || !r.lng);
+    const sinGeo = this.rutasPlanificadas.filter(r => !this.tieneCoordenada(r));
     if (sinGeo.length > 0) {
       this.swal.aviso(`Auto-ruteo listo: ${ordenadas.length} entregas ordenadas. ${sinGeo.length} sin ubicación quedaron sin número.`, 'info');
     } else {
@@ -600,7 +629,7 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
     this.cdr.detectChanges();
     try {
-      this.renderizarMapa();
+      this.renderizarMapa(true);
     } catch {
       /* ignorar errores de render del mapa */
     }
@@ -608,11 +637,23 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
   /** Guarda las ubicaciones manuales (pendientes + seleccionadas a mano) y asigna el orden. */
   async confirmarOrdenar(): Promise<void> {
-    const seleccion = this.pedidosSeleccion.filter(r => r.lat && r.lng);
-    const manuales = seleccion.map(r => ({ filas: r.filas, lat: r.lat, lng: r.lng }));
+    const seleccion = this.pedidosSeleccion.filter(r =>
+      Number.isFinite(this.coordNumero(r.lat)) && Number.isFinite(this.coordNumero(r.lng))
+    );
+    // Se envían números reales, no strings, para que el backend/Sheets no
+    // reinterprete el punto decimal según la configuración regional.
+    const manuales = seleccion.map(r => ({
+      filas: r.filas,
+      lat: this.coordNumero(r.lat),
+      lng: this.coordNumero(r.lng)
+    }));
     // Snapshot para re-aplicar tras la recarga: la hoja puede devolver datos cacheados
     // (ScriptCache 120 s) o descartar coords fuera de rango, dejando los manuales sin ruta.
-    const snapshot = seleccion.map(r => ({ pedido: String(r.pedido), lat: r.lat as string, lng: r.lng as string }));
+    const snapshot = seleccion.map(r => ({
+      pedido: String(r.pedido),
+      lat: String(this.coordNumero(r.lat)),
+      lng: String(this.coordNumero(r.lng))
+    }));
 
     if (manuales.length > 0) {
       this.carga.mostrar('chofer', 'Guardando ubicaciones…');
@@ -622,6 +663,9 @@ export class ChoferComponent implements OnInit, OnDestroy {
         if (!res?.success) {
           this.swal.error(res?.msg || 'No se pudieron guardar las ubicaciones.');
           return;
+        }
+        if (res?.invalidas > 0) {
+          this.swal.aviso(`${res.invalidas} ubicación(es) no se guardaron porque la coordenada no es válida.`, 'warning');
         }
         await this.cargar();
         this.reaplicarManuales(snapshot);
@@ -679,13 +723,13 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
   elegirCandidato(r: Ruta, cand: CandidatoGeo): void {
     this.recordarCoordenadas(r);
-    r.lat = String(cand.lat);
-    r.lng = String(cand.lng);
+    r.lat = String(Number(cand.lat));
+    r.lng = String(Number(cand.lng));
     this.ubicadasManual.add(String(r.pedido));
     this.seleccionManual.add(String(r.pedido));
     this.pendienteSeleccionado = null;
     this.cdr.detectChanges();
-    this.renderizarMapa();
+    this.renderizarMapa(false);
   }
 
   esCandidatoElegido(r: Ruta, c: CandidatoGeo): boolean {
