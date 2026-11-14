@@ -137,6 +137,7 @@
         <p class="mt-1">Puedes cambiar de placa y continuar asignando. Un pedido solo puede pertenecer a una placa.</p>
         <p class="mt-1">Usa las flechas para reordenar, el tacho para quitar una parada o <b>Deshacer</b> para revertir el último cambio.</p>
         <p class="mt-1">Si vuelves a hacer clic en un punto de la placa seleccionada, se quita de la ruta.</p>
+        <p class="mt-1">Si varios pedidos comparten la misma ubicación, verás un grupo con el número de pedidos. Haz clic en el grupo para separarlos.</p>
         <p class="mt-1">Si excedes la capacidad o asignas fuera de zona, se pedirá confirmación.</p>
         <p *ngIf="sinCoordsCount > 0" class="mt-2 text-[#B25E00]">
           <i class="fas fa-exclamation-triangle mr-1"></i>
@@ -158,6 +159,10 @@
           <span class="w-3 h-3 rounded-full inline-block"
             [style.background]="colorDePlaca(placaSeleccionada)"></span>
           Ruta de {{ placaSeleccionada || 'la placa seleccionada' }}
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <span class="w-4 h-4 rounded-full inline-flex items-center justify-center bg-[#374151] text-white text-[8px] font-bold">3</span>
+          Grupo de pedidos
         </span>
         <span class="ml-auto">Rueda: acercar / alejar · Pasa el mouse sobre un punto para ver el detalle.</span>
       </div>

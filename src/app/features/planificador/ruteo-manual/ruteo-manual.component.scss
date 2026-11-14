@@ -31,6 +31,21 @@
   color: #ffffff;
 }
 
+:host ::ng-deep .punto-manual--grupo {
+  width: 30px;
+  height: 30px;
+  background: #374151;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 0 0 2px #ffffff, 3px 3px 0 2px rgba(55, 65, 81, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+:host ::ng-deep .punto-manual--grupo-abierto {
+  background: #111827;
+  font-size: 18px;
+  font-weight: 500;
+}
+
 :host ::ng-deep .tooltip-ruteo-manual {
   background: #ffffff;
   color: #1f2937;
@@ -110,4 +125,41 @@
   border-top: 1px solid #f0f0f0;
   color: #9ca3af;
   font-size: 11px;
+}
+
+:host ::ng-deep .tooltip-ruteo-grupo-titulo {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+:host ::ng-deep .tooltip-ruteo-grupo-item {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 5px;
+  margin-top: 5px;
+}
+
+:host ::ng-deep .tooltip-ruteo-grupo-estado {
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+:host ::ng-deep .tooltip-ruteo-sin-asignar-inline {
+  color: #9ca3af;
+}
+
+:host ::ng-deep .tooltip-ruteo-grupo-mas {
+  color: #6b7280;
+  font-size: 10px;
+  margin-top: 5px;
+}
+
+:host ::ng-deep .tooltip-ruteo-grupo-ayuda {
+  color: #1565c0;
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 7px;
+  padding-top: 5px;
+  border-top: 1px solid #f0f0f0;
 }

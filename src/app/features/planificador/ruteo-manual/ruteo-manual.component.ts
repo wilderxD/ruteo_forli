@@ -25,10 +25,16 @@ interface ParadaManual {
   orden: number;
 }
 
+interface GrupoUbicacion {
+  key: string;
+  lat: number;
+  lng: number;
+  pedidos: PedidoManual[];
+}
+
 /**
- * Ruteo manual web. Fase 2: selección de placa, asignación por clic,
- * numeración por orden de clic, colores por placa y línea de la ruta
- * seleccionada. La edición avanzada queda para la siguiente fase.
+ * Ruteo manual web: asignación de pedidos por placa sobre el mapa,
+ * agrupación de puntos que comparten coordenada y despliegue en abanico.
  */
 @Component({
   selector: 'app-ruteo-manual',
@@ -55,6 +61,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
   private readonly rutas = new Map<string, string[]>();
   private readonly pedidosPorId = new Map<string, PedidoManual>();
   private readonly historial: Record<string, string[]>[] = [];
+  private grupoExpandidoKey: string | null = null;
   private static readonly MAX_HISTORIAL = 50;
 
   constructor(
@@ -181,6 +188,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
 
   seleccionarPlaca(placa: string): void {
     this.placaSeleccionada = placa;
+    this.grupoExpandidoKey = null;
     this.cdr.detectChanges();
     this.renderizarMapa(false);
   }
@@ -510,6 +518,11 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(this.map);
     this.capas = L.layerGroup().addTo(this.map);
+    this.map.on('click', () => {
+      if (!this.grupoExpandidoKey) return;
+      this.grupoExpandidoKey = null;
+      this.renderizarMapa(false);
+    });
 
     this.renderizarMapa(true);
     setTimeout(() => this.map?.invalidateSize(), 0);
@@ -538,38 +551,33 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
         className: 'tooltip-ruteo-manual'
       });
 
-    this.pedidosUbicados.forEach(p => {
-      const coord = this.coordenada(p);
-      if (!coord) return;
+    this.agruparPedidos().forEach(grupo => {
+      const esGrupo = grupo.pedidos.length > 1;
+      const expandido = esGrupo && this.grupoExpandidoKey === grupo.key;
 
-      const id = this.clavePedido(p);
-      const placa = this.placaDePedido(id);
-      const orden = this.ordenDePedido(id);
-      const esPlacaSeleccionada = placa === this.placaSeleccionada;
-      const color = placa ? this.colorDePlaca(placa) : '#6B7280';
+      if (!esGrupo) {
+        this.crearMarcadorPedido(grupo.pedidos[0]);
+      } else {
+        this.crearMarcadorGrupo(grupo, expandido);
+        if (expandido) {
+          const radio = grupo.pedidos.length === 2
+            ? 32
+            : Math.min(58, 24 + grupo.pedidos.length * 4);
+          grupo.pedidos.forEach((p, i) => {
+            const angulo = grupo.pedidos.length === 2
+              ? i * Math.PI
+              : -Math.PI / 2 + (2 * Math.PI * i) / grupo.pedidos.length;
+            this.crearMarcadorPedido(
+              p,
+              Math.cos(angulo) * radio,
+              Math.sin(angulo) * radio,
+              1000 + i
+            );
+          });
+        }
+      }
 
-      const html = placa
-        ? '<span class="punto-manual punto-manual--asignado" style="background:' + color
-          + ';opacity:' + (esPlacaSeleccionada ? '1' : '0.45') + '"><span>' + orden + '</span></span>'
-        : '<span class="punto-manual"></span>';
-
-      const icon = L.divIcon({
-        className: '',
-        html,
-        iconSize: placa ? [24, 24] : [18, 18],
-        iconAnchor: placa ? [12, 12] : [9, 9]
-      });
-
-      const marker = L.marker([coord.lat, coord.lng], { icon });
-      marker.on('click', () => { void this.agregarPedido(p); });
-      marker.bindTooltip(this.tooltipHtml(p), {
-        sticky: true,
-        direction: 'top',
-        opacity: 1,
-        className: 'tooltip-ruteo-manual'
-      });
-      marker.addTo(capas);
-      puntos.push([coord.lat, coord.lng]);
+      puntos.push([grupo.lat, grupo.lng]);
     });
 
     const paradas = this.paradasSeleccionadas;
@@ -601,6 +609,140 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
       }
     }
     setTimeout(() => this.map?.invalidateSize(), 150);
+  }
+
+  private agruparPedidos(): GrupoUbicacion[] {
+    const grupos = new Map<string, GrupoUbicacion>();
+
+    this.pedidosUbicados.forEach(p => {
+      const coord = this.coordenada(p);
+      if (!coord) return;
+      const key = coord.lat.toFixed(6) + '|' + coord.lng.toFixed(6);
+      let grupo = grupos.get(key);
+      if (!grupo) {
+        grupo = { key, lat: coord.lat, lng: coord.lng, pedidos: [] };
+        grupos.set(key, grupo);
+      }
+      grupo.pedidos.push(p);
+    });
+
+    return Array.from(grupos.values());
+  }
+
+  private crearMarcadorPedido(p: PedidoManual, dx = 0, dy = 0, zIndex = 0): void {
+    const capas = this.capas;
+    const coord = this.coordenada(p);
+    if (!capas || !coord) return;
+
+    const id = this.clavePedido(p);
+    const placa = this.placaDePedido(id);
+    const orden = this.ordenDePedido(id);
+    const esPlacaSeleccionada = placa === this.placaSeleccionada;
+    const color = placa ? this.colorDePlaca(placa) : '#6B7280';
+    const size = placa ? 24 : 18;
+
+    const html = placa
+      ? '<span class="punto-manual punto-manual--asignado" style="background:' + color
+        + ';opacity:' + (esPlacaSeleccionada ? '1' : '0.45') + '"><span>' + orden + '</span></span>'
+      : '<span class="punto-manual"></span>';
+
+    const icon = L.divIcon({
+      className: '',
+      html,
+      iconSize: [size, size],
+      iconAnchor: [size / 2 - dx, size / 2 - dy]
+    });
+
+    const marker = L.marker([coord.lat, coord.lng], {
+      icon,
+      zIndexOffset: zIndex,
+      bubblingMouseEvents: false
+    });
+    marker.on('click', () => { void this.agregarPedido(p); });
+    marker.bindTooltip(this.tooltipHtml(p), {
+      sticky: true,
+      direction: 'top',
+      opacity: 1,
+      className: 'tooltip-ruteo-manual'
+    });
+    marker.addTo(capas);
+  }
+
+  private crearMarcadorGrupo(grupo: GrupoUbicacion, expandido: boolean): void {
+    const capas = this.capas;
+    if (!capas) return;
+
+    const color = this.colorGrupo(grupo);
+    const html = '<span class="punto-manual punto-manual--grupo'
+      + (expandido ? ' punto-manual--grupo-abierto' : '')
+      + '" style="background:' + color + '"><span>'
+      + (expandido ? '−' : grupo.pedidos.length)
+      + '</span></span>';
+
+    const icon = L.divIcon({
+      className: '',
+      html,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+
+    const marker = L.marker([grupo.lat, grupo.lng], {
+      icon,
+      zIndexOffset: 900,
+      bubblingMouseEvents: false
+    });
+    marker.on('click', () => this.alternarGrupo(grupo.key));
+    marker.bindTooltip(expandido ? 'Cerrar grupo' : this.tooltipGrupoHtml(grupo), {
+      sticky: true,
+      direction: 'top',
+      opacity: 1,
+      className: 'tooltip-ruteo-manual'
+    });
+    marker.addTo(capas);
+  }
+
+  private alternarGrupo(key: string): void {
+    this.grupoExpandidoKey = this.grupoExpandidoKey === key ? null : key;
+    this.renderizarMapa(false);
+  }
+
+  private colorGrupo(grupo: GrupoUbicacion): string {
+    for (const p of grupo.pedidos) {
+      const placa = this.placaDePedido(this.clavePedido(p));
+      if (placa) return this.colorDePlaca(placa);
+    }
+    return '#374151';
+  }
+
+  private tooltipGrupoHtml(grupo: GrupoUbicacion): string {
+    const visibles = grupo.pedidos.slice(0, 5);
+    const items = visibles.map(p => {
+      const placa = this.placaDePedido(this.clavePedido(p));
+      const orden = this.ordenDePedido(this.clavePedido(p));
+      const estado = placa
+        ? '<span style="color:' + this.colorDePlaca(placa) + '">' + this.esc(placa) + ' · parada ' + orden + '</span>'
+        : '<span class="tooltip-ruteo-sin-asignar-inline">Sin asignar</span>';
+      return '<div class="tooltip-ruteo-grupo-item">'
+        + '<div class="tooltip-ruteo-cliente">' + this.esc(p.cliente) + '</div>'
+        + '<div class="tooltip-ruteo-meta">Pedido ' + this.esc(p.pedido) + ' · ' + this.esc(p.unidades) + ' uds</div>'
+        + '<div class="tooltip-ruteo-producto">' + this.esc(this.resumenProductos(p)) + '</div>'
+        + '<div class="tooltip-ruteo-grupo-estado">' + estado + '</div>'
+        + '</div>';
+    }).join('');
+
+    const restantes = grupo.pedidos.length - visibles.length;
+    const extra = restantes > 0
+      ? '<div class="tooltip-ruteo-grupo-mas">+' + restantes + ' pedido(s) más</div>'
+      : '';
+
+    return '<div class="tooltip-ruteo tooltip-ruteo-grupo">'
+      + '<div class="tooltip-ruteo-grupo-titulo">'
+      + grupo.pedidos.length + ' pedidos en esta ubicación'
+      + '</div>'
+      + items
+      + extra
+      + '<div class="tooltip-ruteo-grupo-ayuda">Haz clic para separar los puntos.</div>'
+      + '</div>';
   }
 
   private coordenada(p: PedidoManual): { lat: number; lng: number } | null {
