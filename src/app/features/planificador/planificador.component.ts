@@ -242,9 +242,14 @@ asignando = false;
       this.swal.aviso('Ingresa el código del producto.', 'warning');
       return;
     }
+    const unidades = Number(this.nuevoCodigoUnidades);
+    if (String(this.nuevoCodigoUnidades ?? '').trim() === '' || !Number.isFinite(unidades) || unidades < 0) {
+      this.swal.aviso('Las unidades deben ser 0 o más. Usa 0 si el producto no ocupa capacidad.', 'warning');
+      return;
+    }
     this.carga.mostrar('planificador', 'Guardando producto...');
     try {
-      const res = await this.api.post('planificar_guardar_codigo', { codigo, unidades: this.nuevoCodigoUnidades }, this.sesion.token);
+      const res = await this.api.post('planificar_guardar_codigo', { codigo, unidades }, this.sesion.token);
       this.carga.ocultar('planificador');
       if (res?.success) {
         this.cerrarModalCodigo();

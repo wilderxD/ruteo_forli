@@ -46,7 +46,7 @@
       </button>
     </div>
     <p class="text-xs text-slate-500 mt-2">
-      "composicion" = código del producto → unidades que trae el combo. "vehiculos" = placa → capacidad (uds) y zonas permitidas (vacío = todas). Las hojas se crean automáticamente si faltan.
+      "composicion" = código del producto → unidades de capacidad que ocupa (0 = no ocupa). "vehiculos" = placa → capacidad (uds) y zonas permitidas (vacío = todas). Las hojas se crean automáticamente si faltan.
     </p>
 
     <div *ngIf="distritoKeys.length > 0" class="mt-3 flex flex-wrap gap-2">
@@ -353,8 +353,11 @@
         <input type="text" [(ngModel)]="nuevoCodigo" class="w-full px-3 py-2 rounded-lg border border-[#E0E0E0] text-sm focus:outline-none focus:border-[#2E7D32]">
       </div>
       <div>
-        <label class="block text-xs text-slate-500 mb-1">Unidades que trae el combo</label>
-        <input type="number" min="0.1" step="0.1" [(ngModel)]="nuevoCodigoUnidades" class="w-full px-3 py-2 rounded-lg border border-[#E0E0E0] text-sm focus:outline-none focus:border-[#2E7D32]">
+        <label class="block text-xs text-slate-500 mb-1">Unidades de capacidad que ocupa</label>
+        <input type="number" min="0" step="0.1" [(ngModel)]="nuevoCodigoUnidades" class="w-full px-3 py-2 rounded-lg border border-[#E0E0E0] text-sm focus:outline-none focus:border-[#2E7D32]">
+        <p class="text-[11px] text-slate-500 mt-1">
+          0 = no ocupa capacidad (p. ej. almohada o pata de cama). 1 = ocupa el espacio de un colchón de 2 plazas.
+        </p>
       </div>
       <button (click)="guardarCodigo()" class="w-full px-4 py-2 text-sm font-semibold text-white bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg transition">
         <i class="fas fa-check mr-1"></i> Guardar producto
