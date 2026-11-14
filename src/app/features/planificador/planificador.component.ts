@@ -7,12 +7,13 @@ import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
 import { SwalService } from '../../shared/services/swal.service';
 import { CargandoService } from '../../shared/services/cargando.service';
-import { EstadoPlanificacion, ResultadoDistribucion, DetalleGeo, CandidatoGeo, VehiculoConfig, AsignacionVehiculo, NoAsignado, PedidoAsignado } from '../../core/models';
+import { EstadoPlanificacion, ResultadoDistribucion, DetalleGeo, CandidatoGeo, VehiculoConfig, AsignacionVehiculo, NoAsignado, PedidoAsignado, DatosRuteoManual } from '../../core/models';
+import { RuteoManualComponent } from './ruteo-manual/ruteo-manual.component';
 
 @Component({
   selector: 'app-planificador',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RuteoManualComponent],
   templateUrl: './planificador.component.html',
   styleUrls: ['./planificador.component.scss']
 })
@@ -53,6 +54,9 @@ asignando = false;
   pedidoAsignar: NoAsignado | null = null;
   placaAsignar = '';
   pedidoRutaRef: PedidoAsignado | null = null;
+  modoManual = false;
+  cargandoManual = false;
+  datosManual?: DatosRuteoManual;
 
   private map?: L.Map;
   private capas?: L.LayerGroup;
@@ -824,6 +828,106 @@ asignando = false;
     }
   }
 
+  async abrirRuteoManual(): Promise<void> {
+    if (this.cargandoManual) return;
+
+    const total = this.estado?.total ?? 0;
+    const sinCoords = this.estado?.sinCoords ?? 0;
+    if (total - sinCoords <= 0) {
+      this.swal.error('No hay pedidos ubicados. Geolocaliza primero las direcciones.');
+      return;
+    }
+
+    if (sinCoords > 0) {
+      const continuar = await this.swal.confirmar(
+        'Pedidos sin ubicación',
+        'Hay ' + sinCoords + ' pedido(s) sin coordenadas. No aparecerán en el mapa y quedarán sin placa. ¿Continuar con el ruteo manual?',
+        'warning',
+        'Sí, continuar'
+      );
+      if (!continuar) return;
+    }
+
+    this.cargandoManual = true;
+    this.carga.mostrar('planificador', 'Preparando ruteo manual…');
+    try {
+      const res = await this.api.post('planificar_manual_datos', {}, this.sesion.token);
+      if (!res?.success) {
+        this.swal.error(this.msgApi(res, 'No se pudieron cargar los datos para el ruteo manual.'));
+        return;
+      }
+
+      const pedidos = Array.isArray(res.pedidos) ? res.pedidos : [];
+      const ubicados = pedidos.filter((p: any) => p.tieneCoords).length;
+      if (ubicados === 0) {
+        this.swal.error('No hay pedidos con coordenadas para mostrar en el mapa.');
+        return;
+      }
+
+      this.datosManual = res as DatosRuteoManual;
+      this.modoManual = true;
+      this.cdr.detectChanges();
+      setTimeout(() => {
+        document.getElementById('ruteoManual')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    } catch {
+      this.swal.error('Sin conexión. No se pudo preparar el ruteo manual.');
+    } finally {
+      this.carga.ocultar('planificador');
+      this.cargandoManual = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  salirRuteoManual(): void {
+    this.modoManual = false;
+    this.datosManual = undefined;
+    this.cdr.detectChanges();
+    setTimeout(() => {
+      document.getElementById('pasoDistribuir')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+
+  get claveBorradorManual(): string {
+    const sesion = this.sesion.obtener();
+    const pedidos = (this.datosManual?.pedidos || [])
+      .map(p => String(p.pedido || ''))
+      .sort()
+      .join('|');
+    let hash = 0;
+    for (let i = 0; i < pedidos.length; i++) {
+      hash = ((hash << 5) - hash + pedidos.charCodeAt(i)) | 0;
+    }
+    return 'ruteo_manual_' + (sesion?.dni || 'admin') + '_' + (sesion?.fechaGlobal || 'sin-fecha')
+      + '_' + String(hash >>> 0);
+  }
+
+  async aplicarRuteoManual(resultado: ResultadoDistribucion): Promise<void> {
+    const claveBorrador = this.claveBorradorManual;
+    const resultadoAnterior = this.resultado;
+    this.resultado = resultado;
+    this.cdr.detectChanges();
+
+    const aplicado = await this.aplicar();
+    if (!aplicado) {
+      this.resultado = resultadoAnterior;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.modoManual = false;
+    this.datosManual = undefined;
+    try {
+      localStorage.removeItem(claveBorrador);
+    } catch {
+      /* localStorage no disponible */
+    }
+    this.cdr.detectChanges();
+    setTimeout(() => {
+      document.getElementById('pasoDistribuir')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+
   async distribuir(): Promise<void> {
     const placas = this.placasSeleccionadas;
     if (!this.autoVehiculos && placas.length === 0) {
@@ -875,33 +979,48 @@ asignando = false;
     }
   }
 
-  async aplicar(): Promise<void> {
-    if (!this.resultado) return;
+  async aplicar(): Promise<boolean> {
+    if (!this.resultado) return false;
+
+    const sinAsignar = this.resultado.sinAsignar ?? 0;
+    const sinUbicar = this.resultado.sinUbicar ?? 0;
+    let detalle = 'Se reemplazará TODO el contenido de PRÓXIMA (rutas) con estos '
+      + this.resultado.distribuidos + ' pedidos y se limpiará la hoja "planificacion".';
+    if (sinAsignar > 0) {
+      detalle += '\n\nQuedarán ' + sinAsignar + ' pedido(s) ubicado(s) sin placa.';
+    }
+    if (sinUbicar > 0) {
+      detalle += '\n\nHay ' + sinUbicar + ' pedido(s) sin coordenadas que también quedarán sin placa.';
+    }
+
     const ok = await this.swal.confirmar(
       '¿Aplicar a la hoja "rutas"?',
-      'Se reemplazará TODO el contenido de PRÓXIMA (rutas) con estos ' + this.resultado.distribuidos + ' pedidos y se limpiará la hoja "planificacion".',
+      detalle,
       'warning',
       'Sí, aplicar'
     );
-    if (!ok) return;
+    if (!ok) return false;
 
     this.carga.mostrar('planificador', 'Aplicando a la hoja "rutas"...');
     try {
       const res = await this.api.post('planificar_aplicar', { asignacion: this.resultado.vehiculos }, this.sesion.token);
       this.carga.ocultar('planificador');
       if (res?.success) {
-        this.swal.exito(res.msg || 'Planificación aplicada.');
+        void this.swal.exito(res.msg || 'Planificación aplicada.');
         this.resultado = undefined;
         this.placaMapa = '';
         this.detallesGeo = [];
         this.removerMapa();
         await this.cargarEstado();
-      } else {
-        this.swal.error(this.msgApi(res, 'No se pudo aplicar.'));
+        return true;
       }
+
+      this.swal.error(this.msgApi(res, 'No se pudo aplicar.'));
+      return false;
     } catch {
       this.carga.ocultar('planificador');
       this.swal.error('Sin conexión. No se pudo aplicar.');
+      return false;
     }
   }
 

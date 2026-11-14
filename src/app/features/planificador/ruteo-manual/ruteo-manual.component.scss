@@ -1,0 +1,113 @@
+:host ::ng-deep .leaflet-container {
+  z-index: 0;
+}
+
+:host ::ng-deep .punto-manual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #6b7280;
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  font-size: 7px;
+}
+
+:host ::ng-deep .punto-manual--base {
+  width: 30px;
+  height: 30px;
+  background: #2e7d32;
+  font-size: 14px;
+}
+
+:host ::ng-deep .punto-manual--asignado {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+:host ::ng-deep .tooltip-ruteo-manual {
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.35;
+  max-width: 340px;
+  white-space: normal;
+}
+
+:host ::ng-deep .tooltip-ruteo-manual.leaflet-tooltip-top::before {
+  border-top-color: #ffffff;
+}
+
+:host ::ng-deep .tooltip-ruteo-cliente {
+  font-weight: 700;
+  color: #111827;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+:host ::ng-deep .tooltip-ruteo-meta {
+  color: #6b7280;
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+:host ::ng-deep .tooltip-ruteo-producto-item {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 4px;
+  margin-top: 4px;
+}
+
+:host ::ng-deep .tooltip-ruteo-producto {
+  color: #374151;
+  font-weight: 600;
+}
+
+:host ::ng-deep .tooltip-ruteo-codigo {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+:host ::ng-deep .tooltip-ruteo-cantidad {
+  color: #6b7280;
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+:host ::ng-deep .tooltip-ruteo-direccion {
+  color: #4b5563;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+:host ::ng-deep .tooltip-ruteo-distrito {
+  color: #1565c0;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+:host ::ng-deep .tooltip-ruteo-asignado {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+:host ::ng-deep .tooltip-ruteo-sin-asignar {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid #f0f0f0;
+  color: #9ca3af;
+  font-size: 11px;
+}

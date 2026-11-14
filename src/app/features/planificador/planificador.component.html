@@ -147,15 +147,22 @@
   </div>
 
   <!-- Paso 3: Distribuir -->
-  <div class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
+  <div *ngIf="!modoManual" id="pasoDistribuir" class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
       <div>
         <h4 class="font-bold text-slate-800"><i class="fas fa-truck-ramp-box mr-2 text-[#F57C00]"></i>Distribuir en vehículos</h4>
         <p class="text-xs text-slate-500 mt-1">Elige las unidades. Se agrupa por zona → distrito → punto más cercano; las unidades con más restricciones se asignan primero y los sobrantes se unen al final.</p>
       </div>
-      <button (click)="distribuir()" [disabled]="asignando || (!autoVehiculos && placasSeleccionadas.length === 0)" class="px-4 py-2 text-sm font-semibold text-white bg-[#F57C00] hover:bg-[#E65100] rounded-lg transition disabled:opacity-40">
-        <i class="fas fa-magic mr-1"></i> {{ asignando ? 'Optimizando...' : 'Optimizar' }}
-      </button>
+      <div class="flex flex-wrap items-center gap-2">
+        <button (click)="abrirRuteoManual()"
+          [disabled]="cargandoManual || ((estado?.total ?? 0) - (estado?.sinCoords ?? 0)) <= 0"
+          class="px-4 py-2 text-sm font-semibold text-[#D32F2F] bg-white border border-[#D32F2F]/40 hover:bg-[#D32F2F]/10 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+          <i class="fas fa-hand-pointer mr-1"></i> {{ cargandoManual ? 'Preparando...' : 'Ruteo manual' }}
+        </button>
+        <button (click)="distribuir()" [disabled]="asignando || (!autoVehiculos && placasSeleccionadas.length === 0)" class="px-4 py-2 text-sm font-semibold text-white bg-[#F57C00] hover:bg-[#E65100] rounded-lg transition disabled:opacity-40">
+          <i class="fas fa-magic mr-1"></i> {{ asignando ? 'Optimizando...' : 'Optimizar' }}
+        </button>
+      </div>
     </div>
     <div class="flex flex-wrap gap-2 items-center">
       <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-sm font-medium transition select-none"
@@ -192,7 +199,7 @@
   </div>
 
   <!-- Paso 4: Resultado + Aplicar -->
-  <div *ngIf="resultado" class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
+  <div *ngIf="resultado && !modoManual" class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
       <div>
         <h4 class="font-bold text-slate-800"><i class="fas fa-map-location-dot mr-2 text-[#1565C0]"></i>Resultado de la distribución</h4>
@@ -275,6 +282,16 @@
         <p class="text-xs text-slate-500 mt-1">Mapa de {{ placaMapa }}: los números son el orden de entrega desde la base.</p>
       </div>
     </div>
+  </div>
+
+  <!-- Ruteo manual (Fase 1) -->
+  <div *ngIf="modoManual && datosManual" id="ruteoManual">
+    <app-ruteo-manual
+      [datos]="datosManual"
+      [borradorKey]="claveBorradorManual"
+      (salir)="salirRuteoManual()"
+      (aplicar)="aplicarRuteoManual($event)">
+    </app-ruteo-manual>
   </div>
 </div>
 

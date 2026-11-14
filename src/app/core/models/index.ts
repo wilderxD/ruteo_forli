@@ -135,6 +135,12 @@ export interface VehiculoConfig {
   zonas: string[];
 }
 
+export interface ProductoPedido {
+  codigo: string;
+  modelo?: string;
+  cantidad: string;
+}
+
 export interface PedidoAsignado {
   pedido: string;
   filas: number[];
@@ -147,6 +153,42 @@ export interface PedidoAsignado {
   lng: string;
   orden: number;
   unidades: number;
+  modelo?: string;
+  cantidad?: string;
+  zona?: string;
+  items?: ProductoPedido[];
+}
+
+export interface PedidoManual {
+  pedido: string;
+  filas: number[];
+  cliente: string;
+  direccion: string;
+  referencia: string;
+  distrito: string;
+  distritoRaw?: string;
+  telefono?: string;
+  modelo?: string;
+  cantidad?: string;
+  observaciones?: string;
+  estado?: string;
+  ordenActual?: string;
+  lat: string;
+  lng: string;
+  unidades: number;
+  zona: string;
+  tieneCoords: boolean;
+  items: ProductoPedido[];
+}
+
+export interface DatosRuteoManual {
+  success: boolean;
+  base: { lat: number; lng: number };
+  vehiculos: VehiculoConfig[];
+  pedidos: PedidoManual[];
+  sinCoords: number;
+  sinCoordsDetalle?: { pedido: string; cliente: string }[];
+  backendVersion?: string;
 }
 
 export interface AsignacionVehiculo {
@@ -181,6 +223,7 @@ export interface ResultadoDistribucion {
   distribuidos: number;
   sinUbicar: number;
   sinUbicarDetalle?: { pedido: string; cliente: string }[];
+  sinAsignar?: number;
   autoSeleccion?: string[];
   noAsignados?: NoAsignado[];
   advertencias?: { codigo: string; cantidad: number }[];
