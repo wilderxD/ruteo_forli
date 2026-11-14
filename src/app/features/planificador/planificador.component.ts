@@ -1184,7 +1184,11 @@ asignando = false;
       this.capas = undefined;
     }
 
-    this.map = L.map(el, { scrollWheelZoom: false });
+    this.map = L.map(el, {
+      scrollWheelZoom: true,
+      wheelDebounceTime: 40,
+      wheelPxPerZoomLevel: 120
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(this.map);

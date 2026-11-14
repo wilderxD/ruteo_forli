@@ -501,7 +501,11 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     const el = this.mapaContainer?.nativeElement;
     if (!el) return;
 
-    this.map = L.map(el, { scrollWheelZoom: false });
+    this.map = L.map(el, {
+      scrollWheelZoom: true,
+      wheelDebounceTime: 40,
+      wheelPxPerZoomLevel: 120
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(this.map);
