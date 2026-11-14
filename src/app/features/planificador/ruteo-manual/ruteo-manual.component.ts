@@ -63,6 +63,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
   private readonly historial: Record<string, string[]>[] = [];
   private grupoExpandidoKey: string | null = null;
   private static readonly MAX_HISTORIAL = 50;
+  private static readonly RADIO_AGRUPACION_METROS = 5;
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -612,21 +613,30 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
   }
 
   private agruparPedidos(): GrupoUbicacion[] {
-    const grupos = new Map<string, GrupoUbicacion>();
+    const grupos: GrupoUbicacion[] = [];
 
     this.pedidosUbicados.forEach(p => {
       const coord = this.coordenada(p);
       if (!coord) return;
-      const key = coord.lat.toFixed(6) + '|' + coord.lng.toFixed(6);
-      let grupo = grupos.get(key);
-      if (!grupo) {
-        grupo = { key, lat: coord.lat, lng: coord.lng, pedidos: [] };
-        grupos.set(key, grupo);
+
+      // Agrupa por proximidad real, no por coincidencia exacta de texto.
+      // Así los pedidos del mismo domicilio con pequeñas diferencias de GPS
+      // comparten el marcador y se pueden desplegar juntos.
+      const grupo = grupos.find(g =>
+        this.haversineKm(coord.lat, coord.lng, g.lat, g.lng) * 1000
+          <= RuteoManualComponent.RADIO_AGRUPACION_METROS
+      );
+
+      if (grupo) {
+        grupo.pedidos.push(p);
+        return;
       }
-      grupo.pedidos.push(p);
+
+      const key = coord.lat.toFixed(6) + '|' + coord.lng.toFixed(6);
+      grupos.push({ key, lat: coord.lat, lng: coord.lng, pedidos: [p] });
     });
 
-    return Array.from(grupos.values());
+    return grupos;
   }
 
   private crearMarcadorPedido(p: PedidoManual, dx = 0, dy = 0, zIndex = 0): void {
