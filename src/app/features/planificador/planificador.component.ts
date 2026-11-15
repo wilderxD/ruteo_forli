@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import * as L from 'leaflet';
 import { ApiService } from '../../core/services/api.service';
 import { SesionService } from '../../core/services/sesion.service';
@@ -36,6 +36,8 @@ asignando = false;
   modalPedido: DetalleGeo | null = null;
   modalLat: number | null = null;
   modalLng: number | null = null;
+  urlMapa = '';
+  errorUrlMapa = '';
   backendVersion = '';
   vehiculosDisp: VehiculoConfig[] = [];
   modalCodigoAbierto = false;
@@ -601,7 +603,7 @@ asignando = false;
       case 'multiple':
         return { texto: '⚠ Múltiples (' + (d.candidatos?.length || 2) + ')', clase: 'bg-[#FFF4E5] text-[#B25E00] border-[#F3C677]' };
       case 'centro_distrito':
-        return { texto: '🏙 Centro de distrito', clase: 'bg-sky-50 text-[#1565C0] border-[#BBDEFB]' };
+        return { texto: '🏙 Centro de distrito (aprox.)', clase: 'bg-sky-50 text-[#1565C0] border-[#BBDEFB]' };
       default:
         return { texto: '✗ No encontrada', clase: 'bg-red-50 text-red-700 border-red-200' };
     }
@@ -648,6 +650,8 @@ asignando = false;
     this.modalLng = d.lat && d.lng ? parseFloat(d.lng) : null;
     this.candidatoSeleccionado = null;
     this.marcadoresCandidatos = [];
+    this.urlMapa = '';
+    this.errorUrlMapa = '';
     this.modalAbierto = true;
     this.cdr.detectChanges();
     setTimeout(() => this.inicializarMapaModal(), 0);
@@ -683,6 +687,89 @@ asignando = false;
     this.colocarMarcadorModal();
     this.resaltarCandidatoSeleccionado();
     this.cdr.detectChanges();
+  }
+
+  aplicarUrlMapa(): void {
+    const texto = String(this.urlMapa || '').trim();
+    if (!texto) {
+      this.errorUrlMapa = 'Pega una URL de Google Maps.';
+      return;
+    }
+    if (this.esUrlCortaGoogleMaps(texto)) {
+      this.errorUrlMapa = 'Los enlaces cortos no contienen coordenadas. Abre el enlace y copia la URL completa.';
+      return;
+    }
+
+    const coords = this.extraerCoordenadasUrl(texto);
+    if (!coords) {
+      this.errorUrlMapa = 'No se pudieron extraer coordenadas. Pega la URL completa de Google Maps o escribe "lat,lng".';
+      return;
+    }
+
+    this.errorUrlMapa = '';
+    this.candidatoSeleccionado = null;
+    this.modalLat = coords.lat;
+    this.modalLng = coords.lng;
+    this.colocarMarcadorModal();
+    this.resaltarCandidatoSeleccionado();
+    if (this.modalMap) {
+      this.modalMap.setView([coords.lat, coords.lng], 17);
+    }
+    this.cdr.detectChanges();
+  }
+
+  private esUrlCortaGoogleMaps(texto: string): boolean {
+    return /(?:maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(texto);
+  }
+
+  private extraerCoordenadasUrl(valor: string): { lat: number; lng: number } | null {
+    let texto = String(valor || '').trim();
+    try {
+      texto = decodeURIComponent(texto);
+    } catch {
+      // Si la URL trae un porcentaje inválido, se intenta con el texto original.
+    }
+
+    const normalizar = (latTexto: string, lngTexto: string): { lat: number; lng: number } | null => {
+      const lat = Number(latTexto.replace(',', '.'));
+      const lng = Number(lngTexto.replace(',', '.'));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+      return { lat, lng };
+    };
+
+    // Google Maps suele guardar la ubicación exacta del marcador en !3d...!4d...
+    let match = texto.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/i);
+    if (match) return normalizar(match[1], match[2]);
+
+    // Respaldo: coordenadas de la vista del mapa.
+    match = texto.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    if (match) return normalizar(match[1], match[2]);
+
+    let url: URL | null = null;
+    try {
+      const conProtocolo = /^[a-z][a-z0-9+.-]*:\/\//i.test(texto) ? texto : 'https://' + texto;
+      url = new URL(conProtocolo);
+    } catch {
+      url = null;
+    }
+
+    if (url) {
+      const claves = ['q', 'query', 'll', 'sll', 'center', 'destination', 'daddr'];
+      for (const clave of claves) {
+        const parametro = url.searchParams.get(clave);
+        if (!parametro) continue;
+        const limpio = parametro.replace(/^loc:/i, '').trim();
+        match = limpio.match(/(-?\d+(?:[.,]\d+)?)\s*,\s*(-?\d+(?:[.,]\d+)?)/);
+        if (match) return normalizar(match[1], match[2]);
+      }
+    }
+
+    // También se acepta que el usuario pegue directamente "lat,lng".
+    match = texto.match(/(-?\d{1,3}(?:[.,]\d+)?)\s*,\s*(-?\d{1,3}(?:[.,]\d+)?)/);
+    if (match) return normalizar(match[1], match[2]);
+
+    return null;
   }
 
   private resaltarCandidatoSeleccionado(): void {
@@ -730,7 +817,11 @@ asignando = false;
         this.modalMap.remove();
         this.modalMap = undefined;
       }
-      this.modalMap = L.map('mapaModal', { scrollWheelZoom: false });
+      this.modalMap = L.map('mapaModal', {
+        scrollWheelZoom: true,
+        wheelDebounceTime: 40,
+        wheelPxPerZoomLevel: 120
+      });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       }).addTo(this.modalMap);
@@ -776,6 +867,8 @@ asignando = false;
     this.modalLng = null;
     this.candidatoSeleccionado = null;
     this.marcadoresCandidatos = [];
+    this.urlMapa = '';
+    this.errorUrlMapa = '';
     this.cdr.detectChanges();
     const m = this.modalMap;
     this.modalMap = undefined;

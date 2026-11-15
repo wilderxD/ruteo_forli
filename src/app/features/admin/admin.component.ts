@@ -383,7 +383,11 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   get estados(): [string, EstadoPlaca][] {
     const fuente = this.esManana ? this.estado?.estadoManana : this.estado?.estadoHoy;
-    return fuente ? Object.entries(fuente) : [];
+    return fuente
+      ? Object.entries(fuente).sort(([a], [b]) =>
+          a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })
+        )
+      : [];
   }
 
   alternarVista(e: Event): void {
