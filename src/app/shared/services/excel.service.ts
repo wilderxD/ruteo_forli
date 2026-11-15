@@ -28,6 +28,13 @@ const BORDE_CABECERA = {
   right: { style: 'thin', color: { rgb: COLOR.rojoOscuro } }
 };
 
+const BORDE_NEGRO_FINO = {
+  top: { style: 'thin', color: { rgb: '000000' } },
+  bottom: { style: 'thin', color: { rgb: '000000' } },
+  left: { style: 'thin', color: { rgb: '000000' } },
+  right: { style: 'thin', color: { rgb: '000000' } }
+};
+
 const BORDE_TITULO = {
   top: { style: 'thin', color: { rgb: COLOR.oscuro } },
   bottom: { style: 'thin', color: { rgb: COLOR.oscuro } },
@@ -43,7 +50,7 @@ const BORDE_SOPORTE = {
 };
 
 const ESTILO_TITULO = {
-  font: { bold: true, sz: 18, color: { rgb: COLOR.blanco }, name: 'Calibri' },
+  font: { bold: true, sz: 22, color: { rgb: COLOR.blanco }, name: 'Calibri' },
   fill: { fgColor: { rgb: COLOR.oscuro }, patternType: 'solid' },
   alignment: { horizontal: 'center', vertical: 'center' },
   border: BORDE_TITULO
@@ -54,6 +61,13 @@ const ESTILO_CABECERA = {
   fill: { fgColor: { rgb: COLOR.rojo }, patternType: 'solid' },
   alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
   border: BORDE_CABECERA
+};
+
+const ESTILO_CABECERA_RUTA = {
+  font: { bold: true, sz: 11, color: { rgb: COLOR.blanco }, name: 'Calibri' },
+  fill: { fgColor: { rgb: COLOR.rojo }, patternType: 'solid' },
+  alignment: { horizontal: 'left', vertical: 'center', wrapText: false },
+  border: BORDE_NEGRO_FINO
 };
 
 const ESTILO_CABECERA_SOPORTE = {
@@ -84,6 +98,27 @@ const ESTILO_CELDA_CENTRO_ALT = {
   fill: { fgColor: { rgb: COLOR.filaAlterna }, patternType: 'solid' }
 };
 
+const ESTILO_CELDA_RUTA = {
+  font: { sz: 11, color: { rgb: COLOR.texto }, name: 'Calibri' },
+  alignment: { vertical: 'center', wrapText: false },
+  border: BORDE_NEGRO_FINO
+};
+
+const ESTILO_CELDA_RUTA_ALT = {
+  ...ESTILO_CELDA_RUTA,
+  fill: { fgColor: { rgb: COLOR.filaAlterna }, patternType: 'solid' }
+};
+
+const ESTILO_CELDA_RUTA_CENTRO = {
+  ...ESTILO_CELDA_RUTA,
+  alignment: { horizontal: 'center', vertical: 'center', wrapText: false }
+};
+
+const ESTILO_CELDA_RUTA_CENTRO_ALT = {
+  ...ESTILO_CELDA_RUTA_CENTRO,
+  fill: { fgColor: { rgb: COLOR.filaAlterna }, patternType: 'solid' }
+};
+
 const ESTILO_CELDA_DESTACADA = {
   ...ESTILO_CELDA,
   font: { bold: true, sz: 10, color: { rgb: COLOR.rojo }, name: 'Calibri' },
@@ -98,7 +133,26 @@ const ESTILO_CELDA_DESTACADA_ALT = {
 @Injectable({ providedIn: 'root' })
 export class ExcelService {
 
-  generarExcelExplosion(rutas: unknown[][]): void {
+  /** Sufijo de fecha y hora de Perú para no sobrescribir reportes. */
+  sufijoFechaHora(): string {
+    const partes = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(new Date());
+
+    const valor = (tipo: string): string =>
+      partes.find(parte => parte.type === tipo)?.value ?? '';
+
+    return valor('year') + '-' + valor('month') + '-' + valor('day')
+      + '_' + valor('hour') + '-' + valor('minute');
+  }
+
+  generarExcelExplosion(rutas: unknown[][], sufijo?: string): void {
     const filas = rutas.slice(1).filter(fila => fila && fila[12]);
     const aoa: XLSX.CellObject[][] = [];
     const altoFilas: XLSX.RowInfo[] = [];
@@ -125,10 +179,10 @@ export class ExcelService {
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Explosion');
-    XLSX.writeFile(wb, 'ruta para la explosion.xlsx');
+    XLSX.writeFile(wb, 'ruta para la explosion ' + (sufijo || this.sufijoFechaHora()) + '.xlsx');
   }
 
-  generarExcelRutaDelDia(rutas: unknown[][], asignacion: unknown[][]): void {
+  generarExcelRutaDelDia(rutas: unknown[][], asignacion: unknown[][], sufijo?: string): void {
     const choferApellido: Record<string, string> = {};
     for (let i = 1; i < asignacion.length; i++) {
       const p = String(asignacion[i][0] || '');
@@ -165,15 +219,15 @@ export class ExcelService {
       rowIndex++;
 
       const cabecera = ['TIENDA', 'TIPO', 'CLIENTE', 'DIRECCION', 'REFERENCIA', 'DISTRITO', 'TELEFONO', 'CODIGO', 'MODELOL', 'CANTIDAD', 'PEDIDO', 'ORDEN_ENTREGA.', 'OBSERVACIONES'];
-      aoa.push(cabecera.map(titulo => this.celda(titulo, ESTILO_CABECERA)));
-      altoFilas.push({ hpt: 30 });
+      aoa.push(cabecera.map(titulo => this.celda(titulo, ESTILO_CABECERA_RUTA)));
+      altoFilas.push({ hpt: 15 });
       rowIndex++;
 
       items.forEach((r, indice) => {
         const alterna = indice % 2 === 1;
         const valores = [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[13], r[11]];
         aoa.push(valores.map((valor, columna) => this.celda(valor, this.estiloRuta(columna, alterna))));
-        altoFilas.push({ hpt: 30 });
+        altoFilas.push({ hpt: 15 });
         rowIndex++;
       });
 
@@ -187,15 +241,11 @@ export class ExcelService {
 
     const ws = this.crearHoja(aoa, altoFilas);
     ws['!merges'] = merges;
-    ws['!cols'] = [
-      { wch: 14 }, { wch: 10 }, { wch: 30 }, { wch: 42 }, { wch: 28 },
-      { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 32 }, { wch: 10 },
-      { wch: 14 }, { wch: 16 }, { wch: 42 }
-    ];
+    ws['!cols'] = Array.from({ length: 13 }, () => ({ wch: 15 }));
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Ruta del Dia');
-    XLSX.writeFile(wb, 'ruta del dia.xlsx');
+    XLSX.writeFile(wb, 'ruta del dia ' + (sufijo || this.sufijoFechaHora()) + '.xlsx');
   }
 
   reporteSoporte(registros: {
@@ -264,9 +314,9 @@ export class ExcelService {
   private estiloRuta(columna: number, alterna: boolean): object {
     const centrada = [1, 6, 7, 9, 10, 11].includes(columna);
     if (centrada) {
-      return alterna ? ESTILO_CELDA_CENTRO_ALT : ESTILO_CELDA_CENTRO;
+      return alterna ? ESTILO_CELDA_RUTA_CENTRO_ALT : ESTILO_CELDA_RUTA_CENTRO;
     }
-    return alterna ? ESTILO_CELDA_ALT : ESTILO_CELDA;
+    return alterna ? ESTILO_CELDA_RUTA_ALT : ESTILO_CELDA_RUTA;
   }
 
   private estiloSoporte(columna: number, alterna: boolean): object {

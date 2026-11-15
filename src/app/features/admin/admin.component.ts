@@ -573,8 +573,9 @@ export class AdminComponent implements OnInit, OnDestroy {
       const res = await this.api.get('datos_excel', { manana: this.esManana ? '1' : '0' }, this.token);
       if (res.success) {
         const datos = res as unknown as DatosExcel;
-        this.excel.generarExcelExplosion(datos.rutas);
-        this.excel.generarExcelRutaDelDia(datos.rutas, datos.asignacion);
+        const sufijo = this.excel.sufijoFechaHora();
+        this.excel.generarExcelExplosion(datos.rutas, sufijo);
+        this.excel.generarExcelRutaDelDia(datos.rutas, datos.asignacion, sufijo);
       }
     } catch {
       this.swal.error('Error al generar el Excel.');
