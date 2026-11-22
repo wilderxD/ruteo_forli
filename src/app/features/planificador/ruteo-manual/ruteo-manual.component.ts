@@ -194,6 +194,30 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     this.renderizarMapa(false);
   }
 
+  /** Actualiza en caliente la coordenada de un pedido ya cargado en el mapa.
+   *  Se usa cuando el usuario corrige la ubicación desde la tabla o el modal. */
+  actualizarUbicacion(pedido: string, lat: number | string, lng: number | string): void {
+    const id = String(pedido || '').trim();
+    if (!id) return;
+    const p = this.pedidosPorId.get(id);
+    if (!p) return;
+
+    const teniaCoords = this.coordenada(p) !== null;
+    p.lat = String(lat);
+    p.lng = String(lng);
+    p.tieneCoords = true;
+
+    if (!teniaCoords) {
+      this.datos.sinCoords = Math.max(0, (this.datos.sinCoords || 0) - 1);
+      this.datos.sinCoordsDetalle = (this.datos.sinCoordsDetalle || [])
+        .filter(x => String(x.pedido || '').trim() !== id);
+    }
+
+    this.grupoExpandidoKey = null;
+    this.renderizarMapa(false);
+    this.cdr.detectChanges();
+  }
+
   volver(): void {
     this.salir.emit();
   }

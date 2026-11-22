@@ -6,6 +6,7 @@ import { SwalService } from '../../shared/services/swal.service';
 
 export interface ApiOpciones {
   reintentar?: boolean;
+  timeoutMs?: number;
 }
 
 /**
@@ -42,6 +43,7 @@ export class ApiService {
 
   async post(accion: string, body: any = {}, token = '', opciones: ApiOpciones = {}): Promise<any> {
     const reintentar = opciones.reintentar ?? false;
+    const timeoutMs = opciones.timeoutMs ?? ApiService.TIMEOUT_MS;
     const q = new URLSearchParams();
     q.set('api', accion);
     const url = `${this.base}?${q.toString()}`;
@@ -54,7 +56,7 @@ export class ApiService {
     let ultimoError: unknown = new Error('No se pudo conectar con el servidor.');
     for (let intento = 0; intento < ApiService.INTENTOS; intento++) {
       const controlador = new AbortController();
-      const temporizador = setTimeout(() => controlador.abort(), ApiService.TIMEOUT_MS);
+      const temporizador = setTimeout(() => controlador.abort(), timeoutMs);
       let reintentarIntento = false;
       try {
         const res = await fetch(url, {

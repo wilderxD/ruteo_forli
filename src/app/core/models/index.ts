@@ -234,6 +234,11 @@ export interface CandidatoGeo {
   lat: number;
   lng: number;
   direccion: string;
+  distritoDetectado?: string;
+  distritoOk?: boolean | null;
+  precision?: 'exacta' | 'aproximada' | 'centro';
+  independiente?: boolean;
+  consulta?: string;
 }
 
 export interface DetalleGeo {
@@ -248,5 +253,7 @@ export interface DetalleGeo {
   estado: 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada';
   candidatos: CandidatoGeo[];
   queryUsado?: string;
-  distritoOk?: boolean;
+  distritoOk?: boolean | null;
+  distritoDetectado?: string;
+  precision?: 'exacta' | 'aproximada' | 'centro' | 'no_verificada' | 'no_encontrada';
 }

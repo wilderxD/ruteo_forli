@@ -5,7 +5,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
       <h3 class="font-bold text-slate-800 f-display tracking-wide"><i class="fas fa-route mr-2 text-[#D32F2F]"></i>Planificador de Flota</h3>
       <span *ngIf="backendVersion" class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Backend v: {{ backendVersion }}</span>
-      <button (click)="cargarEstado()" [disabled]="cargando"
+      <button (click)="cargarEstado(true)" [disabled]="cargando"
         class="text-sm text-[#5B403D] hover:text-[#D32F2F] transition font-medium btn-ghost disabled:opacity-40 disabled:cursor-not-allowed">
         <i class="fas fa-sync-alt mr-1" [class.fa-spin]="cargando"></i> {{ cargando ? 'Cargando...' : 'Refrescar' }}
       </button>
@@ -60,10 +60,23 @@
       <div>
         <h4 class="font-bold text-slate-800"><i class="fas fa-satellite mr-2 text-[#2E7D32]"></i>Geolocalizar pedidos</h4>
         <p class="text-xs text-slate-500 mt-1">Busca las coordenadas de las direcciones (procesa por lotes). Luego revisa la tabla: hay direcciones con varias coincidencias o sin encontrar.</p>
+        <p class="text-xs text-slate-500 mt-1">Si cambiaste el distrito de pedidos que ya tenían coordenadas, usa <b>Revalidar distritos</b>. No mueve los puntos; solo detecta si la dirección parece estar en otro distrito.</p>
+        <p class="text-xs text-slate-500 mt-1">Para revisar o corregir pedidos que ya estaban geolocalizados en la hoja, usa <b>Cargar geolocalizados</b>.</p>
       </div>
-      <button (click)="geocodificar()" [disabled]="geocodificando || (estado?.sinCoords ?? 0) === 0" class="px-4 py-2 text-sm font-semibold text-white bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg transition disabled:opacity-40">
-        <i class="fas fa-location-arrow mr-1"></i> {{ geocodificando ? 'Geolocalizando...' : 'Geolocalizar' }}
-      </button>
+      <div class="flex flex-wrap gap-2">
+        <button (click)="geocodificar()" [disabled]="geocodificando || revalidando || cargandoGeo || (estado?.sinCoords ?? 0) === 0" class="px-4 py-2 text-sm font-semibold text-white bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg transition disabled:opacity-40">
+          <i class="fas fa-location-arrow mr-1"></i> {{ geocodificando ? 'Geolocalizando...' : 'Geolocalizar' }}
+        </button>
+        <button (click)="revalidarDistritos()" [disabled]="revalidando || geocodificando || cargandoGeo || ((estado?.total ?? 0) - (estado?.sinCoords ?? 0)) <= 0" class="px-4 py-2 text-sm font-semibold text-[#1565C0] bg-sky-50 hover:bg-sky-100 border border-[#1565C0]/40 rounded-lg transition disabled:opacity-40">
+          <i class="fas fa-search-location mr-1"></i> {{ revalidando ? 'Revalidando...' : 'Revalidar distritos' }}
+        </button>
+        <button (click)="cargarGeolocalizados()" [disabled]="cargandoGeo || geocodificando || revalidando" class="px-4 py-2 text-sm font-semibold text-[#5B403D] bg-white hover:bg-slate-50 border border-[#E0E0E0] rounded-lg transition disabled:opacity-40">
+          <i class="fas fa-cloud-arrow-down mr-1"></i> {{ cargandoGeo ? 'Cargando...' : 'Cargar geolocalizados' }}
+        </button>
+      </div>
+    </div>
+    <div *ngIf="revalidando" class="mt-3">
+      <p class="text-xs text-slate-500">Revalidando distritos de pedidos ya geocodificados...</p>
     </div>
     <div *ngIf="geocodificando" class="mt-3">
       <div class="w-full bg-[#E8ECEB] rounded-full h-2 overflow-hidden">
@@ -79,19 +92,33 @@
 
   <!-- Tabla de geolocalización -->
   <div *ngIf="detallesGeo.length > 0" class="bg-white rounded-lg shadow-sm border border-[#E0E0E0] p-4">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
       <h4 class="font-bold text-slate-800"><i class="fas fa-table mr-2 text-[#1565C0]"></i>Resultado de geolocalización</h4>
-      <div class="flex flex-wrap gap-1">
-        <button *ngFor="let f of ['todas', 'ubicada', 'multiple', 'centro_distrito', 'no_encontrada']"
-          (click)="setFiltroGeo(f)"
-          class="px-2 py-1 text-xs rounded-full border transition font-medium"
-          [class.bg-[#121212]]="filtroGeo === f"
-          [class.text-white]="filtroGeo === f"
-          [class.text-slate-600]="filtroGeo !== f"
-          [class.border-[#E0E0E0]]="filtroGeo !== f">
-          {{ f === 'todas' ? 'Todas' : f === 'ubicada' ? '✓ Ubicadas' : f === 'multiple' ? '⚠ Múltiples' : f === 'centro_distrito' ? '🏙 Centro' : '✗ No encontradas' }} ({{ contarGeo(f) }})
-        </button>
+      <div class="flex items-center gap-3 w-full lg:w-auto">
+        <div class="relative flex-1 lg:w-80">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[#5B403D] text-sm"></i>
+          <input type="text" [(ngModel)]="queryGeo" autocomplete="off" spellcheck="false"
+            aria-label="Buscar en pedidos geolocalizados"
+            placeholder="Buscar cliente, pedido, dirección o distrito…"
+            class="campo w-full pl-9 pr-9 py-2 text-sm bg-white focus:border-[#D32F2F]">
+          <button *ngIf="queryGeo" type="button" (click)="limpiarBusquedaGeo()" aria-label="Limpiar búsqueda"
+            class="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-[#BA1A1A] rounded transition">
+            <i class="fas fa-times text-xs"></i>
+          </button>
+        </div>
+        <span class="text-xs text-slate-500 whitespace-nowrap">{{ geoFiltrados.length }} resultado(s)</span>
       </div>
+    </div>
+    <div class="flex flex-wrap gap-1 mb-3">
+      <button *ngFor="let f of ['todas', 'ubicada', 'multiple', 'otro_distrito', 'aproximada', 'no_verificada', 'centro_distrito', 'no_encontrada']"
+        (click)="setFiltroGeo(f)"
+        class="px-2 py-1 text-xs rounded-full border transition font-medium"
+        [class.bg-[#121212]]="filtroGeo === f"
+        [class.text-white]="filtroGeo === f"
+        [class.text-slate-600]="filtroGeo !== f"
+        [class.border-[#E0E0E0]]="filtroGeo !== f">
+        {{ f === 'todas' ? 'Todas' : f === 'ubicada' ? '✓ Ubicadas' : f === 'multiple' ? '⚠ Múltiples' : f === 'otro_distrito' ? '⚠ Otro distrito' : f === 'aproximada' ? '~ Aproximadas' : f === 'no_verificada' ? '? Sin verificar' : f === 'centro_distrito' ? '🏙 Centro' : '✗ No encontradas' }} ({{ contarGeo(f) }})
+      </button>
     </div>
     <div class="overflow-auto max-h-[420px] rounded-lg border border-[#E0E0E0]">
       <table class="w-full text-sm">
@@ -116,20 +143,23 @@
             <td class="px-3 py-2 text-slate-600">{{ d.distrito }}</td>
             <td class="px-3 py-2">
               <span class="inline-block px-2 py-0.5 rounded-full border text-xs font-medium" [class]="estadoGeoInfo(d).clase">{{ estadoGeoInfo(d).texto }}</span>
-              <span *ngIf="d.distritoOk === false && (d.estado === 'ubicada' || d.estado === 'multiple')" class="inline-block mt-1 px-2 py-0.5 rounded-full border border-[#B25E00]/40 bg-[#FFF4E5] text-[#B25E00] text-[10px] font-medium">Posible otro distrito</span>
-              <span *ngIf="d.estado === 'centro_distrito'" class="block mt-1 text-[10px] text-[#1565C0]">Ubicación aproximada. Usa Señalizar para corregir.</span>
+              <span *ngIf="d.distritoDetectado" class="block mt-1 text-[10px] text-slate-500">Detectado: {{ d.distritoDetectado }}</span>
+              <span *ngIf="d.distritoOk === false" class="block mt-1 text-[10px] text-[#B25E00]">Esperado: {{ d.distrito }}</span>
+              <span *ngIf="esAproximada(d)" class="block mt-1 text-[10px] text-[#1565C0]">Ubicación aproximada. Usa Señalizar para corregir.</span>
             </td>
             <td class="px-3 py-2 f-data text-xs text-slate-500">
               <span *ngIf="d.lat && d.lng">{{ d.lat }}, {{ d.lng }}</span>
               <span *ngIf="!d.lat || !d.lng">—</span>
             </td>
             <td class="px-3 py-2">
-              <div *ngIf="d.estado === 'multiple' || d.distritoOk === false" class="flex flex-col gap-1">
+              <div *ngIf="(d.candidatos || []).length > 0 && (d.distritoOk !== true || d.precision !== 'exacta' || (d.candidatos || []).length > 1)" class="flex flex-col gap-1">
                 <button *ngFor="let c of d.candidatos; let i = index"
                   (click)="elegirCandidato(d, c)"
                   [title]="c.direccion"
                   class="px-2 py-1 text-xs rounded-lg border text-left transition font-medium border-[#B25E00]/40 text-[#B25E00] hover:bg-[#FFF4E5]">
-                  Opción {{ i + 1 }}: {{ c.lat.toFixed(5) }}, {{ c.lng.toFixed(5) }}
+                  <span class="font-semibold">Opción {{ i + 1 }}</span>
+                  <span *ngIf="c.distritoDetectado"> · {{ c.distritoDetectado }}</span>
+                  <span class="block text-[10px] font-normal opacity-80">{{ c.direccion }}</span>
                 </button>
               </div>
               <button
@@ -311,17 +341,19 @@
         <b>{{ modalPedido?.cliente }}</b> · Ped: {{ modalPedido?.pedido || 'SIN N°' }}<br>
         {{ modalPedido?.direccion }} — {{ modalPedido?.distrito }}
       </p>
-      <div *ngIf="(modalPedido?.estado === 'multiple' || modalPedido?.distritoOk === false) && (modalPedido?.candidatos?.length ?? 0) > 0" class="flex flex-wrap gap-1">
+      <div *ngIf="(modalPedido?.candidatos?.length ?? 0) > 0" class="flex flex-col gap-1">
         <button *ngFor="let c of modalPedido!.candidatos; let i = index"
           (click)="seleccionarCandidatoModal(c)"
           [title]="c.direccion"
-          class="px-2 py-1 text-xs rounded-lg border transition font-medium"
+          class="px-2 py-1 text-xs rounded-lg border transition font-medium text-left"
           [class.bg-[#1565C0]]="esCandidatoModalSeleccionado(c)"
           [class.text-white]="esCandidatoModalSeleccionado(c)"
           [class.bg-white]="!esCandidatoModalSeleccionado(c)"
           [class.text-[#1565C0]]="!esCandidatoModalSeleccionado(c)"
           [class.border-[#1565C0]/40]="!esCandidatoModalSeleccionado(c)">
-          Opción {{ i + 1 }}: {{ c.lat.toFixed(5) }}, {{ c.lng.toFixed(5) }}
+          <span class="font-semibold">Opción {{ i + 1 }}</span>
+          <span *ngIf="c.distritoDetectado"> · {{ c.distritoDetectado }}</span>
+          <span class="block text-[10px] font-normal opacity-80">{{ c.direccion }}</span>
         </button>
       </div>
       <div class="rounded-lg border border-[#E0E0E0] bg-[#F8FAFC] p-2">
@@ -346,10 +378,18 @@
       </div>
       <div id="mapaModal" class="h-[300px] w-full rounded-lg overflow-hidden z-0"></div>
       <p class="text-xs text-slate-500">
-        <ng-container *ngIf="modalPedido?.estado === 'multiple'">Elija una de las {{ (modalPedido?.candidatos?.length || 1) }} coincidencias (marcadores numerados) o haga clic en el mapa para colocar el punto manualmente.</ng-container>
-        <ng-container *ngIf="modalPedido?.estado === 'centro_distrito'">Se usó el centro del distrito como aproximación. Pega una URL de Google Maps o haga clic en el mapa para colocar el punto exacto.</ng-container>
-        <ng-container *ngIf="modalPedido?.estado !== 'multiple' && modalPedido?.estado !== 'centro_distrito' && modalPedido?.distritoOk === false">Confirme la ubicación encontrada (Opción 1) o haga clic en el mapa para colocar otra manualmente.</ng-container>
-        <ng-container *ngIf="modalPedido?.estado !== 'multiple' && modalPedido?.estado !== 'centro_distrito' && modalPedido?.distritoOk !== false">Haga clic en el mapa para colocar el punto manualmente.</ng-container>
+        <ng-container *ngIf="modalPedido?.distritoOk === false">
+          La dirección parece estar en <b>{{ modalPedido?.distritoDetectado || 'otro distrito' }}</b>, no en {{ modalPedido?.distrito }}. Elija una opción o coloque el punto manualmente.
+        </ng-container>
+        <ng-container *ngIf="modalPedido?.distritoOk !== false && (modalPedido?.estado === 'centro_distrito' || modalPedido?.precision === 'centro' || modalPedido?.precision === 'aproximada')">
+          La ubicación es aproximada. Pegue una URL de Google Maps o haga clic en el mapa para colocar el punto exacto.
+        </ng-container>
+        <ng-container *ngIf="modalPedido?.distritoOk !== false && modalPedido?.estado === 'multiple'">
+          Elija una de las {{ (modalPedido?.candidatos?.length || 1) }} coincidencias o haga clic en el mapa.
+        </ng-container>
+        <ng-container *ngIf="modalPedido?.distritoOk !== false && modalPedido?.estado !== 'multiple' && modalPedido?.estado !== 'centro_distrito' && modalPedido?.precision !== 'aproximada' && modalPedido?.precision !== 'centro'">
+          Haga clic en el mapa para colocar el punto manualmente.
+        </ng-container>
         <span *ngIf="modalLat !== null"> · Coords: {{ modalLat.toFixed(6) }}, {{ modalLng?.toFixed(6) }}</span>
       </p>
       <p class="text-[11px] text-slate-400">

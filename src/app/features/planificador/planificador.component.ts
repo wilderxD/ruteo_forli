@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx-js-style';
@@ -24,14 +24,17 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   resultado?: ResultadoDistribucion;
   placaMapa = '';
   geocodificando = false;
+  revalidando = false;
   geoProgreso = 0;
   geoTotal = 0;
-asignando = false;
+  asignando = false;
   combinando = false;
   destinoSeleccion: Record<string, string> = {};
   autoVehiculos = true;
   detallesGeo: DetalleGeo[] = [];
-  filtroGeo: 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' = 'todas';
+  filtroGeo: 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' | 'otro_distrito' | 'aproximada' | 'no_verificada' = 'todas';
+  queryGeo = '';
+  cargandoGeo = false;
   modalAbierto = false;
   modalPedido: DetalleGeo | null = null;
   modalLat: number | null = null;
@@ -60,6 +63,8 @@ asignando = false;
   cargandoManual = false;
   datosManual?: DatosRuteoManual;
 
+  @ViewChild(RuteoManualComponent) private ruteoManual?: RuteoManualComponent;
+
   private map?: L.Map;
   private capas?: L.LayerGroup;
   private mapaListo = false;
@@ -82,7 +87,7 @@ asignando = false;
   ) {}
 
   async ngOnInit(): Promise<void> {
-    await this.cargarEstado();
+    await this.cargarEstado(true);
     if (this.estado?.codigosSinComposicion?.length) {
       this.abrirModalCodigosPendientes();
     }
@@ -133,8 +138,71 @@ asignando = false;
   }
 
   get geoFiltrados(): DetalleGeo[] {
-    if (this.filtroGeo === 'todas') return this.detallesGeo;
-    return this.detallesGeo.filter(d => d.estado === this.filtroGeo);
+    return this.ordenarGeo(this.filtrarGeoPorTexto(this.geoBasePorEstado(this.filtroGeo)));
+  }
+
+  /** Pedidos que cumplen solo el filtro de estado (sin texto de búsqueda). */
+  private geoBasePorEstado(estado: string): DetalleGeo[] {
+    if (estado === 'todas') return this.detallesGeo;
+    if (estado === 'otro_distrito') return this.detallesGeo.filter(d => d.distritoOk === false);
+    if (estado === 'aproximada') return this.detallesGeo.filter(d => this.esAproximada(d));
+    if (estado === 'no_verificada') {
+      return this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
+        && (d.precision === 'no_verificada' || (d.distritoOk == null && !this.esAproximada(d))));
+    }
+    if (estado === 'centro_distrito') {
+      return this.detallesGeo.filter(d => d.estado === 'centro_distrito' || d.precision === 'centro');
+    }
+    return this.detallesGeo.filter(d => d.estado === estado);
+  }
+
+  /** Normaliza para buscar sin distinguir mayúsculas, tildes ni espacios extra. */
+  private normalizarBusqueda(valor: unknown): string {
+    return String(valor ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /** Búsqueda por múltiples términos (todos deben aparecer) sobre cliente,
+   *  pedido, dirección, referencia y distrito. */
+  private filtrarGeoPorTexto(lista: DetalleGeo[]): DetalleGeo[] {
+    const consulta = this.normalizarBusqueda(this.queryGeo);
+    if (!consulta) return lista;
+    const terminos = consulta.split(' ').filter(Boolean);
+    return lista.filter(d => {
+      const texto = this.normalizarBusqueda([
+        d.cliente,
+        d.pedido,
+        d.direccion,
+        d.referencia,
+        d.distrito,
+        d.distritoDetectado
+      ].join(' '));
+      return terminos.every(t => texto.includes(t));
+    });
+  }
+
+  private ordenarGeo(lista: DetalleGeo[]): DetalleGeo[] {
+    return [...lista].sort((a, b) => {
+      const ca = (a.cliente || '').trim();
+      const cb = (b.cliente || '').trim();
+      const porCliente = ca.localeCompare(cb, 'es', { sensitivity: 'base', numeric: true });
+      if (porCliente !== 0) return porCliente;
+      return (a.pedido || '').localeCompare(b.pedido || '', 'es', { sensitivity: 'base', numeric: true });
+    });
+  }
+
+  limpiarBusquedaGeo(): void {
+    this.queryGeo = '';
+  }
+
+  esAproximada(d: DetalleGeo): boolean {
+    return d.precision === 'aproximada'
+      || d.precision === 'centro'
+      || d.estado === 'centro_distrito';
   }
 
   private msgApi(res: any, fallback: string): string {
@@ -149,11 +217,11 @@ asignando = false;
     return d.innerHTML;
   }
 
-  async cargarEstado(): Promise<void> {
+  async cargarEstado(forzar = false): Promise<void> {
     this.cargando = true;
     this.carga.mostrar('planificador', 'Cargando estado de planificación…');
     try {
-      const res = await this.api.get('planificar_estado', {}, this.sesion.token);
+      const res = await this.api.get('planificar_estado', { forzar }, this.sesion.token);
       if (res?.success) {
         this.estado = res as EstadoPlanificacion;
         this.backendVersion = res.backendVersion || '';
@@ -559,7 +627,7 @@ asignando = false;
     try {
       let restantes = this.geoTotal;
       while (restantes > 0) {
-        const res = await this.api.post('planificar_geocodificar', {}, this.sesion.token);
+        const res = await this.api.post('planificar_geocodificar', {}, this.sesion.token, { timeoutMs: 60000 });
         if (!res?.success) {
           this.carga.ocultar('planificador');
           this.geocodificando = false;
@@ -578,11 +646,21 @@ asignando = false;
       this.geocodificando = false;
       await this.cargarEstado();
       const mult = this.detallesGeo.filter(d => d.estado === 'multiple').length;
-      const centro = this.detallesGeo.filter(d => d.estado === 'centro_distrito').length;
+      const centro = this.detallesGeo.filter(d => d.estado === 'centro_distrito' || d.precision === 'centro').length;
       const noEncontradas = this.detallesGeo.filter(d => d.estado === 'no_encontrada').length;
-      if (mult > 0 || centro > 0 || noEncontradas > 0) {
+      const otros = this.detallesGeo.filter(d => d.distritoOk === false).length;
+      const aprox = this.detallesGeo.filter(d => d.precision === 'aproximada').length;
+      const sinVerificar = this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
+        && d.distritoOk == null && !this.esAproximada(d)).length;
+      if (mult > 0 || centro > 0 || noEncontradas > 0 || otros > 0 || aprox > 0 || sinVerificar > 0) {
         this.swal.aviso(
-          'Geolocalización terminada. Múltiples: ' + mult + ', centro de distrito: ' + centro + ', no encontradas: ' + noEncontradas + '. Revisa la tabla y resuélvelas.',
+          'Geolocalización terminada. Múltiples: ' + mult
+          + ', otro distrito: ' + otros
+          + ', aproximadas: ' + aprox
+          + ', centro de distrito: ' + centro
+          + ', sin verificar: ' + sinVerificar
+          + ', no encontradas: ' + noEncontradas
+          + '. Revisa la tabla y resuélvelas.',
           'warning'
         );
       } else {
@@ -592,16 +670,179 @@ asignando = false;
       this.carga.ocultar('planificador');
       this.geocodificando = false;
       this.cdr.detectChanges();
-      this.swal.error('Sin conexión. No se pudo geolocalizar.');
+      this.swal.error('No se pudo completar la geolocalización. Si hay muchos pedidos, vuelve a intentar; el avance ya guardado se conserva.');
     }
   }
 
+  async revalidarDistritos(): Promise<void> {
+    if (this.revalidando) return;
+    const totalEstado = (this.estado?.total ?? 0) - (this.estado?.sinCoords ?? 0);
+    if (totalEstado <= 0) {
+      this.swal.aviso('No hay pedidos geocodificados para revalidar.', 'info');
+      return;
+    }
+
+    this.revalidando = true;
+    let offset = 0;
+    let total = totalEstado;
+    this.carga.mostrar('planificador', 'Revalidando distritos...', 0);
+    try {
+      let restantes = 1;
+      let vueltas = 0;
+      while (restantes > 0) {
+        vueltas++;
+        if (vueltas > 1000) {
+          throw new Error('La revalidación no avanzó; se detuvo por seguridad.');
+        }
+
+        const res = await this.api.post('planificar_revalidar_distritos', { offset }, this.sesion.token, { timeoutMs: 60000 });
+        if (!res?.success) {
+          this.carga.ocultar('planificador');
+          this.revalidando = false;
+          this.cdr.detectChanges();
+          this.swal.error(this.msgApi(res, 'Error al revalidar distritos.'));
+          return;
+        }
+
+        total = Number(res.total) || total;
+        const procesadas = Number(res.procesadas) || 0;
+        if (res.siguienteOffset === undefined || res.siguienteOffset === null) {
+          throw new Error('El backend no devolvió el avance de la revalidación. Actualiza el backend e inténtalo de nuevo.');
+        }
+        const siguiente = Number(res.siguienteOffset);
+        if (!Number.isFinite(siguiente)) {
+          throw new Error('El backend devolvió un avance inválido en la revalidación.');
+        }
+        const nuevoOffset = siguiente;
+
+        if (Array.isArray(res.detalles) && res.detalles.length > 0) {
+          this.fusionarDetalles(res.detalles as DetalleGeo[]);
+        }
+        restantes = Number(res.restantes) || 0;
+
+        // Guarda anti-bucle: el offset debe avanzar cuando aún quedan pedidos.
+        if (restantes > 0 && (procesadas === 0 || nuevoOffset <= offset)) {
+          throw new Error('La revalidación no avanzó; se detuvo por seguridad.');
+        }
+
+        offset = nuevoOffset;
+        const pct = total ? Math.min(100, (offset / total) * 100) : 0;
+        this.carga.progreso('planificador', pct, 'Revalidando distritos... ' + offset + ' / ' + total);
+        this.cdr.detectChanges();
+      }
+
+      this.carga.ocultar('planificador');
+      this.revalidando = false;
+      const otros = this.detallesGeo.filter(d => d.distritoOk === false).length;
+      const aprox = this.detallesGeo.filter(d => this.esAproximada(d)).length;
+      const sinVerificar = this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
+        && d.distritoOk == null && !this.esAproximada(d)).length;
+      this.swal.aviso(
+        'Revalidación terminada. Otro distrito: ' + otros
+        + ', aproximadas: ' + aprox
+        + ', sin verificar: ' + sinVerificar + '.',
+        'warning'
+      );
+    } catch (e) {
+      this.carga.ocultar('planificador');
+      this.revalidando = false;
+      this.cdr.detectChanges();
+      const detalle = e instanceof Error && e.message ? e.message : '';
+      this.swal.error(detalle || 'No se pudo completar la revalidación. Vuelve a intentar; el avance ya guardado se conserva.');
+    }
+  }
+
+  /** Trae desde la hoja los pedidos que ya tienen coordenadas, sin geocodificar.
+   *  Solo agrega los que no están en la tabla para no pisar una revalidación
+   *  hecha en esta sesión. */
+  async cargarGeolocalizados(): Promise<void> {
+    if (this.cargandoGeo) return;
+    this.cargandoGeo = true;
+    this.carga.mostrar('planificador', 'Cargando pedidos geolocalizados…');
+    try {
+      const res = await this.api.get('planificar_geo_listado', {}, this.sesion.token);
+      if (!res?.success) {
+        this.swal.error(this.msgApi(res, 'No se pudieron cargar los pedidos geolocalizados.'));
+        return;
+      }
+
+      const cargados = Array.isArray(res.detalles) ? res.detalles as DetalleGeo[] : [];
+      const combinados = [...this.detallesGeo];
+      const indice = new Map<string, number>();
+      combinados.forEach((d, i) => {
+        const id = String(d.pedido ?? '').trim();
+        if (id) indice.set(id, i);
+      });
+
+      let cargadosNuevos = 0;
+      cargados.forEach(d => {
+        const id = String(d.pedido ?? '').trim();
+        if (!id) return;
+        const posicion = indice.get(id);
+        if (posicion === undefined) {
+          indice.set(id, combinados.length);
+          combinados.push(d);
+          cargadosNuevos++;
+          return;
+        }
+        // Si la fila existente aún no tenía coordenadas (p.ej. "no encontrada"),
+        // se completa con la ubicación que ahora sí está en la hoja.
+        const actual = combinados[posicion];
+        if (!actual.lat || !actual.lng) {
+          combinados[posicion] = d;
+          cargadosNuevos++;
+        }
+      });
+
+      if (cargadosNuevos === 0) {
+        this.swal.aviso('No hay pedidos geolocalizados nuevos para cargar.', 'info');
+        return;
+      }
+
+      this.detallesGeo = combinados;
+      this.filtroGeo = 'todas';
+      this.cdr.detectChanges();
+      this.swal.exito('Se cargaron ' + cargadosNuevos + ' pedido(s) geolocalizado(s).');
+    } catch {
+      this.swal.error('Sin conexión. No se pudieron cargar los pedidos geolocalizados.');
+    } finally {
+      this.cargandoGeo = false;
+      this.carga.ocultar('planificador');
+      this.cdr.detectChanges();
+    }
+  }
+
+  private fusionarDetalles(nuevos: DetalleGeo[]): void {
+    const mapa = new Map<string, DetalleGeo>();
+    this.detallesGeo.forEach(d => {
+      if (d.pedido) mapa.set(String(d.pedido).trim(), d);
+    });
+    nuevos.forEach(d => {
+      if (d.pedido) mapa.set(String(d.pedido).trim(), d);
+    });
+    this.detallesGeo = Array.from(mapa.values());
+  }
+
   estadoGeoInfo(d: DetalleGeo): { texto: string; clase: string } {
+    if (d.estado === 'no_encontrada') {
+      return { texto: '✗ No encontrada', clase: 'bg-red-50 text-red-700 border-red-200' };
+    }
+    if (d.distritoOk === false && (d.estado === 'ubicada' || d.estado === 'multiple')) {
+      return { texto: '⚠ Otro distrito', clase: 'bg-[#FFF4E5] text-[#B25E00] border-[#F3C677]' };
+    }
+    if (this.esAproximada(d)) {
+      return d.precision === 'centro' || d.estado === 'centro_distrito'
+        ? { texto: '🏙 Centro / aproximada', clase: 'bg-sky-50 text-[#1565C0] border-[#BBDEFB]' }
+        : { texto: '~ Aproximada', clase: 'bg-sky-50 text-[#1565C0] border-[#BBDEFB]' };
+    }
+    if (d.precision === 'no_verificada' || d.distritoOk == null) {
+      return { texto: '? Sin verificar', clase: 'bg-slate-100 text-slate-600 border-slate-300' };
+    }
     switch (d.estado) {
       case 'ubicada':
         return { texto: '✓ Ubicada', clase: 'bg-[#2E7D32]/10 text-[#2E7D32] border-[#2E7D32]/30' };
       case 'multiple':
-        return { texto: '⚠ Múltiples (' + (d.candidatos?.length || 2) + ')', clase: 'bg-[#FFF4E5] text-[#B25E00] border-[#F3C677]' };
+        return { texto: '⚠ Múltiples (' + ((d.candidatos || []).length || 2) + ')', clase: 'bg-[#FFF4E5] text-[#B25E00] border-[#F3C677]' };
       case 'centro_distrito':
         return { texto: '🏙 Centro de distrito (aprox.)', clase: 'bg-sky-50 text-[#1565C0] border-[#BBDEFB]' };
       default:
@@ -610,12 +851,13 @@ asignando = false;
   }
 
   contarGeo(estado: string): number {
-    if (estado === 'todas') return this.detallesGeo.length;
-    return this.detallesGeo.filter(d => d.estado === estado).length;
+    // Los contadores reflejan la búsqueda actual para que no confundan:
+    // si buscas un cliente, cada pill muestra cuántos de sus pedidos están en ese estado.
+    return this.filtrarGeoPorTexto(this.geoBasePorEstado(estado)).length;
   }
 
   setFiltroGeo(f: string): void {
-    this.filtroGeo = f as 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada';
+    this.filtroGeo = f as 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' | 'otro_distrito' | 'aproximada' | 'no_verificada';
   }
 
   async elegirCandidato(d: DetalleGeo, c: CandidatoGeo): Promise<void> {
@@ -632,6 +874,12 @@ asignando = false;
         d.lng = String(c.lng);
         d.estado = 'ubicada';
         d.candidatos = [];
+        d.distritoOk = c.distritoOk === false ? false : true;
+        d.distritoDetectado = c.distritoDetectado || d.distritoDetectado || d.distrito;
+        d.precision = c.precision || 'exacta';
+        this.ruteoManual?.actualizarUbicacion(d.pedido, c.lat, c.lng);
+        this.actualizarPedidoEnResultado(d.pedido, String(c.lat), String(c.lng));
+        if (this.modalRutaAbierto) this.renderizarMapaRuta();
         this.swal.exito('Coincidencia elegida.');
         await this.cargarEstado();
       } else {
@@ -641,6 +889,19 @@ asignando = false;
       this.carga.ocultar('planificador');
       this.swal.error('Sin conexión.');
     }
+  }
+
+  private actualizarPedidoEnResultado(pedido: string, lat: string, lng: string): void {
+    const id = String(pedido || '').trim();
+    if (!id || !this.resultado) return;
+    (this.resultado.vehiculos || []).forEach(v => {
+      (v.pedidos || []).forEach(p => {
+        if (String(p.pedido || '').trim() === id) {
+          p.lat = lat;
+          p.lng = lng;
+        }
+      });
+    });
   }
 
   abrirModalSenalizar(d: DetalleGeo): void {
@@ -670,7 +931,9 @@ asignando = false;
       estado: 'ubicada',
       candidatos: [],
       queryUsado: '',
-      distritoOk: true
+      distritoOk: true,
+      distritoDetectado: p.distrito,
+      precision: 'exacta'
     };
     this.pedidoRutaRef = p;
     this.abrirModalSenalizar(d);
@@ -791,7 +1054,6 @@ asignando = false;
   private colocarCandidatosModal(): void {
     const d = this.modalPedido;
     if (!this.modalMap || !d || !d.candidatos?.length) return;
-    if (d.estado !== 'multiple' && d.distritoOk !== false) return;
     d.candidatos.forEach((c, i) => {
       const icon = L.divIcon({
         className: 'punto-mapa punto-mapa--candidato',
@@ -905,10 +1167,15 @@ asignando = false;
         d.lng = String(this.modalLng);
         d.estado = 'ubicada';
         d.candidatos = [];
+        d.distritoOk = true;
+        d.distritoDetectado = d.distrito;
+        d.precision = 'exacta';
         if (this.pedidoRutaRef) {
           this.pedidoRutaRef.lat = String(this.modalLat);
           this.pedidoRutaRef.lng = String(this.modalLng);
         }
+        this.actualizarPedidoEnResultado(d.pedido, String(this.modalLat), String(this.modalLng));
+        this.ruteoManual?.actualizarUbicacion(d.pedido, this.modalLat, this.modalLng);
         this.cerrarModal();
         if (this.pedidoRutaRef && this.modalRutaAbierto) {
           this.renderizarMapaRuta();
@@ -949,7 +1216,7 @@ asignando = false;
     this.cargandoManual = true;
     this.carga.mostrar('planificador', 'Preparando ruteo manual…');
     try {
-      const res = await this.api.post('planificar_manual_datos', {}, this.sesion.token);
+      const res = await this.api.post('planificar_manual_datos', { forzar: true }, this.sesion.token);
       if (!res?.success) {
         this.swal.error(this.msgApi(res, 'No se pudieron cargar los datos para el ruteo manual.'));
         return;
