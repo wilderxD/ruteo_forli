@@ -97,7 +97,7 @@
       <div class="flex items-center gap-3 w-full lg:w-auto">
         <div class="relative flex-1 lg:w-80">
           <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[#5B403D] text-sm"></i>
-          <input type="text" [(ngModel)]="queryGeo" autocomplete="off" spellcheck="false"
+          <input type="text" [ngModel]="queryGeo" (ngModelChange)="onBuscarGeo($event)" autocomplete="off" spellcheck="false"
             aria-label="Buscar en pedidos geolocalizados"
             placeholder="Buscar cliente, pedido, dirección o distrito…"
             class="campo w-full pl-9 pr-9 py-2 text-sm bg-white focus:border-[#D32F2F]">
@@ -118,7 +118,7 @@
         [class.text-white]="filtroGeo === f"
         [class.text-slate-600]="filtroGeo !== f"
         [class.border-[#E0E0E0]]="filtroGeo !== f">
-        {{ f === 'todas' ? 'Todas' : f === 'ubicada' ? '✓ Ubicadas' : f === 'multiple' ? '⚠ Múltiples' : f === 'otro_distrito' ? '⚠ Otro distrito' : f === 'revisar' ? '⚠ Revisar' : f === 'aproximada' ? '~ Aproximadas' : f === 'no_verificada' ? '? Sin verificar' : f === 'centro_distrito' ? '🏙 Centro' : '✗ No encontradas' }} ({{ contarGeo(f) }})
+        {{ f === 'todas' ? 'Todas' : f === 'ubicada' ? '✓ Verificadas' : f === 'multiple' ? '⚠ Múltiples' : f === 'otro_distrito' ? '⚠ Otro distrito' : f === 'revisar' ? '⚠ Revisar' : f === 'aproximada' ? '~ Aproximadas' : f === 'no_verificada' ? '? Sin verificar' : f === 'centro_distrito' ? '🏙 Centro' : '✗ No encontradas' }} ({{ contarGeo(f) }})
       </button>
     </div>
     <div class="overflow-auto max-h-[420px] rounded-lg border border-[#E0E0E0]">

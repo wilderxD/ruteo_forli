@@ -138,32 +138,44 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   }
 
   get geoFiltrados(): DetalleGeo[] {
-    return this.ordenarGeo(this.filtrarGeoPorTexto(this.geoBasePorEstado(this.filtroGeo)));
+    // Con texto, la búsqueda es global (sobre todos los pedidos); el filtro de
+    // estado, si se elige después, acota esos resultados.
+    const texto = this.normalizarBusqueda(this.queryGeo);
+    let base = texto ? this.filtrarGeoPorTexto(this.detallesGeo) : this.detallesGeo;
+    if (this.filtroGeo !== 'todas') {
+      base = base.filter(d => this.categoriaGeo(d) === this.filtroGeo);
+    }
+    return this.ordenarGeo(base);
   }
 
   /** Pedidos que cumplen solo el filtro de estado (sin texto de búsqueda). */
   private geoBasePorEstado(estado: string): DetalleGeo[] {
     if (estado === 'todas') return this.detallesGeo;
-    if (estado === 'otro_distrito') return this.detallesGeo.filter(d => d.distritoOk === false);
-    if (estado === 'revisar') return this.detallesGeo.filter(d => d.revisar === true);
-    if (estado === 'aproximada') return this.detallesGeo.filter(d => this.esAproximada(d));
-    if (estado === 'no_verificada') {
-      return this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
-        && (d.precision === 'no_verificada' || (d.distritoOk == null && !this.esAproximada(d))));
-    }
-    if (estado === 'centro_distrito') {
-      return this.detallesGeo.filter(d => d.estado === 'centro_distrito' || d.precision === 'centro');
-    }
-    return this.detallesGeo.filter(d => d.estado === estado);
+    return this.detallesGeo.filter(d => this.categoriaGeo(d) === estado);
   }
 
-  /** Normaliza para buscar sin distinguir mayúsculas, tildes ni espacios extra. */
+  /** Una sola categoría por pedido, en el mismo orden de prioridad que la
+   *  columna Estado. Así los filtros no se superponen y los conteos cuadran. */
+  private categoriaGeo(d: DetalleGeo): string {
+    if (d.estado === 'no_encontrada') return 'no_encontrada';
+    if (d.distritoOk === false && (d.estado === 'ubicada' || d.estado === 'multiple')) return 'otro_distrito';
+    if (d.revisar === true) return 'revisar';
+    if (this.esAproximada(d)) {
+      return (d.precision === 'centro' || d.estado === 'centro_distrito') ? 'centro_distrito' : 'aproximada';
+    }
+    if (d.precision === 'no_verificada' || d.distritoOk == null) return 'no_verificada';
+    if (d.estado === 'multiple') return 'multiple';
+    return 'ubicada';
+  }
+
+  /** Normaliza para buscar sin distinguir mayúsculas, tildes ni puntuación
+   *  ("NO. 451" y "NO 451" deben coincidir). */
   private normalizarBusqueda(valor: unknown): string {
     return String(valor ?? '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
-      .replace(/\s+/g, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
       .trim();
   }
 
@@ -196,8 +208,17 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Búsqueda global: al escribir se vuelve al filtro "Todas" para que el texto
+   *  se aplique sobre todos los pedidos, no solo sobre el filtro activo. */
+  onBuscarGeo(valor: string): void {
+    this.queryGeo = valor ?? '';
+    if (this.queryGeo.trim()) this.filtroGeo = 'todas';
+    this.cdr.detectChanges();
+  }
+
   limpiarBusquedaGeo(): void {
     this.queryGeo = '';
+    this.cdr.detectChanges();
   }
 
   esAproximada(d: DetalleGeo): boolean {
