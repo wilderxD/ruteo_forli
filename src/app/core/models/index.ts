@@ -256,4 +256,8 @@ export interface DetalleGeo {
   distritoOk?: boolean | null;
   distritoDetectado?: string;
   precision?: 'exacta' | 'aproximada' | 'centro' | 'no_verificada' | 'no_encontrada';
+  /** Distancia (m) entre el punto geocodificado y el guardado (solo revalidación). */
+  distanciaMetros?: number | null;
+  /** true si el punto guardado está lejos del geocodificado y conviene revisarlo. */
+  revisar?: boolean;
 }

@@ -552,24 +552,29 @@ export class ChoferComponent implements OnInit, OnDestroy {
 
     if (sinUbicar.length > 0) {
       this.autoRuteando = true;
-      this.carga.mostrar('chofer', 'Ubicando direcciones con GPS…');
+      this.carga.mostrar('chofer', 'Ubicando direcciones con GPS… puede tardar un minuto');
       try {
-        const res = await this.api.post('geocodificar', { placa: this.placa }, this.sesion.token);
-        this.carga.ocultar('chofer');
-        this.autoRuteando = false;
-        this.cdr.detectChanges();
+        // El backend geocodifica TODOS los pedidos de la placa en serie; con
+        // 15 pedidos puede pasar de 20 s. El timeout por defecto (12 s) abortaba
+        // la petición y dejaba la pantalla sin opciones.
+        const res = await this.api.post('geocodificar', { placa: this.placa }, this.sesion.token, { timeoutMs: 180000 });
         if (!res?.success) {
-          this.swal.error(res?.msg || 'No se pudieron ubicar las direcciones. Revisa que Maps esté autorizado en Apps Script.');
+          this.cdr.detectChanges();
+          this.swal.error(res?.cuotaAgotada
+            ? (res.msg || 'Se agotó la cuota diaria de Google Maps. Vuelve a intentar mañana.')
+            : (res?.msg || 'No se pudieron ubicar las direcciones. Revisa que Maps esté autorizado en Apps Script.'));
           return;
         }
         resumenGeo = res;
         await this.cargar();
       } catch {
-        this.carga.ocultar('chofer');
-        this.autoRuteando = false;
         this.cdr.detectChanges();
-        this.swal.error('Sin conexión. No se pudo geocodificar.');
+        this.swal.error('Sin conexión. No se pudo geocodificar. Si hay muchas direcciones, vuelve a intentar; el avance se conserva.');
         return;
+      } finally {
+        this.autoRuteando = false;
+        this.carga.ocultar('chofer');
+        this.cdr.detectChanges();
       }
     }
 
@@ -594,12 +599,24 @@ export class ChoferComponent implements OnInit, OnDestroy {
       this.modoManual = true;
       this.pendienteSeleccionado = null;
       this.ubicadasManual = new Set<string>();
+      // Mostrar e inicializar el mapa ANTES de dibujar: antes se llamaba a
+      // renderizarMapa con mapaListo=false, el mapa nunca aparecía y el panel
+      // de opciones quedaba inutilizable.
+      this.mostrarMapa = true;
       this.cdr.detectChanges();
-      this.renderizarMapa(true);
-      this.swal.aviso(
-        `${this.pendientes.length} dirección(es) con geolocalización incierta. Elige una coincidencia, arrastra el marcador o usa "Ubicar" y haz clic en el mapa. Luego confirma para asignar el orden.`,
-        'warning'
-      );
+      setTimeout(() => {
+        this.inicializarMapa();
+        this.renderizarMapa(true);
+        this.cdr.detectChanges();
+      }, 0);
+
+      const todosFallaron = !!resumenGeo
+        && Number(resumenGeo.total) > 0
+        && Number(resumenGeo.fallaron) === Number(resumenGeo.total);
+      const aviso = todosFallaron
+        ? 'No se pudo ubicar automáticamente ninguna dirección (no encontradas o cuota de Google agotada). Puedes arrastrar el marcador o usar "Ubicar" y hacer clic en el mapa.'
+        : `${this.pendientes.length} dirección(es) con geolocalización incierta. Elige una coincidencia, arrastra el marcador o usa "Ubicar" y haz clic en el mapa. Luego confirma para asignar el orden.`;
+      this.swal.aviso(aviso, 'warning');
       return;
     }
 

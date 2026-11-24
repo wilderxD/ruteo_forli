@@ -32,7 +32,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   destinoSeleccion: Record<string, string> = {};
   autoVehiculos = true;
   detallesGeo: DetalleGeo[] = [];
-  filtroGeo: 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' | 'otro_distrito' | 'aproximada' | 'no_verificada' = 'todas';
+  filtroGeo: 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' | 'otro_distrito' | 'aproximada' | 'no_verificada' | 'revisar' = 'todas';
   queryGeo = '';
   cargandoGeo = false;
   modalAbierto = false;
@@ -145,6 +145,7 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   private geoBasePorEstado(estado: string): DetalleGeo[] {
     if (estado === 'todas') return this.detallesGeo;
     if (estado === 'otro_distrito') return this.detallesGeo.filter(d => d.distritoOk === false);
+    if (estado === 'revisar') return this.detallesGeo.filter(d => d.revisar === true);
     if (estado === 'aproximada') return this.detallesGeo.filter(d => this.esAproximada(d));
     if (estado === 'no_verificada') {
       return this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
@@ -624,53 +625,99 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
 
     this.carga.mostrar('planificador', 'Geolocalizando... 0 / ' + this.geoTotal, 0);
 
+    let mensajeCorte = '';
+    let huboProgreso = false;
+
     try {
       let restantes = this.geoTotal;
+      let restantesPrevios = Number.MAX_SAFE_INTEGER;
+
       while (restantes > 0) {
         const res = await this.api.post('planificar_geocodificar', {}, this.sesion.token, { timeoutMs: 60000 });
+
         if (!res?.success) {
-          this.carga.ocultar('planificador');
-          this.geocodificando = false;
-          this.cdr.detectChanges();
-          this.swal.error(this.msgApi(res, 'Error al geolocalizar.'));
-          return;
+          // Si el lote se cortó por cuota, se conserva lo procesado hasta ahí.
+          if (Array.isArray(res?.detalles) && res.detalles.length > 0) {
+            this.fusionarDetalles(res.detalles as DetalleGeo[]);
+            huboProgreso = true;
+            const hechas = Number(res.procesadas) || 0;
+            this.geoProgreso = Math.min(this.geoTotal, this.geoProgreso + hechas);
+          }
+          mensajeCorte = res?.cuotaAgotada
+            ? (res.msg || 'Se agotó la cuota diaria de Google Maps. Vuelve a intentar mañana.')
+            : this.msgApi(res, 'Error al geolocalizar.');
+          break;
         }
-        this.geoProgreso += res.procesadas || 0;
-        restantes = res.restantes || 0;
+
+        const procesadas = Number(res.procesadas) || 0;
         if (Array.isArray(res.detalles)) this.detallesGeo = res.detalles as DetalleGeo[];
-        this.cdr.detectChanges();
-        const pct = this.geoTotal ? (this.geoProgreso / this.geoTotal) * 100 : 0;
+        if (procesadas > 0) huboProgreso = true;
+
+        // El progreso nunca puede superar el total real de pedidos.
+        this.geoProgreso = Math.min(this.geoTotal, this.geoProgreso + procesadas);
+        restantes = Number(res.restantes) || 0;
+
+        // Guarda anti-bucle: si el lote no avanzó (cuota agotada o direcciones
+        // imposibles) se corta para no repetir los mismos pedidos sin fin.
+        if (procesadas === 0) {
+          mensajeCorte = 'La geolocalización no avanzó: revisa la cuota de Google Maps o las direcciones del lote.';
+          break;
+        }
+        if (restantes > 0 && restantes >= restantesPrevios) {
+          mensajeCorte = 'La geolocalización no avanzó: el mismo lote se repitió (cuota agotada o direcciones no ubicables).';
+          break;
+        }
+        restantesPrevios = restantes;
+
+        const pct = this.geoTotal ? Math.min(100, (this.geoProgreso / this.geoTotal) * 100) : 0;
         this.carga.progreso('planificador', pct, 'Geolocalizando... ' + this.geoProgreso + ' / ' + this.geoTotal);
+        this.cdr.detectChanges();
       }
+    } catch (e) {
+      mensajeCorte = e instanceof Error && e.message
+        ? e.message
+        : 'No se pudo completar la geolocalización.';
+    } finally {
       this.carga.ocultar('planificador');
       this.geocodificando = false;
-      await this.cargarEstado();
-      const mult = this.detallesGeo.filter(d => d.estado === 'multiple').length;
-      const centro = this.detallesGeo.filter(d => d.estado === 'centro_distrito' || d.precision === 'centro').length;
-      const noEncontradas = this.detallesGeo.filter(d => d.estado === 'no_encontrada').length;
-      const otros = this.detallesGeo.filter(d => d.distritoOk === false).length;
-      const aprox = this.detallesGeo.filter(d => d.precision === 'aproximada').length;
-      const sinVerificar = this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
-        && d.distritoOk == null && !this.esAproximada(d)).length;
-      if (mult > 0 || centro > 0 || noEncontradas > 0 || otros > 0 || aprox > 0 || sinVerificar > 0) {
-        this.swal.aviso(
-          'Geolocalización terminada. Múltiples: ' + mult
-          + ', otro distrito: ' + otros
-          + ', aproximadas: ' + aprox
-          + ', centro de distrito: ' + centro
-          + ', sin verificar: ' + sinVerificar
-          + ', no encontradas: ' + noEncontradas
-          + '. Revisa la tabla y resuélvelas.',
-          'warning'
-        );
-      } else {
-        this.swal.exito('Geolocalización completa. Todos los pedidos tienen coordenadas.');
-      }
-    } catch {
-      this.carga.ocultar('planificador');
-      this.geocodificando = false;
+      this.geoProgreso = Math.min(this.geoProgreso, this.geoTotal);
       this.cdr.detectChanges();
-      this.swal.error('No se pudo completar la geolocalización. Si hay muchos pedidos, vuelve a intentar; el avance ya guardado se conserva.');
+    }
+
+    if (huboProgreso) {
+      try {
+        await this.cargarEstado();
+      } catch {
+        /* el estado se refresca al volver a entrar */
+      }
+    }
+
+    if (mensajeCorte) {
+      this.cdr.detectChanges();
+      this.swal.error(mensajeCorte);
+      return;
+    }
+
+    const mult = this.detallesGeo.filter(d => d.estado === 'multiple').length;
+    const centro = this.detallesGeo.filter(d => d.estado === 'centro_distrito' || d.precision === 'centro').length;
+    const noEncontradas = this.detallesGeo.filter(d => d.estado === 'no_encontrada').length;
+    const otros = this.detallesGeo.filter(d => d.distritoOk === false).length;
+    const aprox = this.detallesGeo.filter(d => d.precision === 'aproximada').length;
+    const sinVerificar = this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
+      && d.distritoOk == null && !this.esAproximada(d)).length;
+    if (mult > 0 || centro > 0 || noEncontradas > 0 || otros > 0 || aprox > 0 || sinVerificar > 0) {
+      this.swal.aviso(
+        'Geolocalización terminada. Múltiples: ' + mult
+        + ', otro distrito: ' + otros
+        + ', aproximadas: ' + aprox
+        + ', centro de distrito: ' + centro
+        + ', sin verificar: ' + sinVerificar
+        + ', no encontradas: ' + noEncontradas
+        + '. Revisa la tabla y resuélvelas.',
+        'warning'
+      );
+    } else {
+      this.swal.exito('Geolocalización completa. Todos los pedidos tienen coordenadas.');
     }
   }
 
@@ -685,7 +732,9 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
     this.revalidando = true;
     let offset = 0;
     let total = totalEstado;
+    let mensajeCorte = '';
     this.carga.mostrar('planificador', 'Revalidando distritos...', 0);
+
     try {
       let restantes = 1;
       let vueltas = 0;
@@ -697,11 +746,14 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
 
         const res = await this.api.post('planificar_revalidar_distritos', { offset }, this.sesion.token, { timeoutMs: 60000 });
         if (!res?.success) {
-          this.carga.ocultar('planificador');
-          this.revalidando = false;
-          this.cdr.detectChanges();
-          this.swal.error(this.msgApi(res, 'Error al revalidar distritos.'));
-          return;
+          // Aunque falle por cuota, se conserva lo revalidado hasta ese punto.
+          if (Array.isArray(res?.detalles) && res.detalles.length > 0) {
+            this.fusionarDetalles(res.detalles as DetalleGeo[]);
+          }
+          mensajeCorte = res?.cuotaAgotada
+            ? (res.msg || 'Se agotó la cuota diaria de Google Maps. Vuelve a intentar mañana.')
+            : this.msgApi(res, 'Error al revalidar distritos.');
+          break;
         }
 
         total = Number(res.total) || total;
@@ -730,26 +782,33 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
         this.carga.progreso('planificador', pct, 'Revalidando distritos... ' + offset + ' / ' + total);
         this.cdr.detectChanges();
       }
-
-      this.carga.ocultar('planificador');
-      this.revalidando = false;
-      const otros = this.detallesGeo.filter(d => d.distritoOk === false).length;
-      const aprox = this.detallesGeo.filter(d => this.esAproximada(d)).length;
-      const sinVerificar = this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
-        && d.distritoOk == null && !this.esAproximada(d)).length;
-      this.swal.aviso(
-        'Revalidación terminada. Otro distrito: ' + otros
-        + ', aproximadas: ' + aprox
-        + ', sin verificar: ' + sinVerificar + '.',
-        'warning'
-      );
     } catch (e) {
+      mensajeCorte = e instanceof Error && e.message
+        ? e.message
+        : 'No se pudo completar la revalidación. Vuelve a intentar; el avance ya guardado se conserva.';
+    } finally {
       this.carga.ocultar('planificador');
       this.revalidando = false;
       this.cdr.detectChanges();
-      const detalle = e instanceof Error && e.message ? e.message : '';
-      this.swal.error(detalle || 'No se pudo completar la revalidación. Vuelve a intentar; el avance ya guardado se conserva.');
     }
+
+    if (mensajeCorte) {
+      this.swal.error(mensajeCorte);
+      return;
+    }
+
+    const otros = this.detallesGeo.filter(d => d.distritoOk === false).length;
+    const aprox = this.detallesGeo.filter(d => this.esAproximada(d)).length;
+    const revisar = this.detallesGeo.filter(d => d.revisar === true).length;
+    const sinVerificar = this.detallesGeo.filter(d => d.estado !== 'no_encontrada'
+      && d.distritoOk == null && !this.esAproximada(d) && d.revisar !== true).length;
+    this.swal.aviso(
+      'Revalidación terminada. Otro distrito: ' + otros
+      + ', a revisar (punto lejos): ' + revisar
+      + ', aproximadas: ' + aprox
+      + ', sin verificar: ' + sinVerificar + '.',
+      'warning'
+    );
   }
 
   /** Trae desde la hoja los pedidos que ya tienen coordenadas, sin geocodificar.
@@ -830,6 +889,10 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
     if (d.distritoOk === false && (d.estado === 'ubicada' || d.estado === 'multiple')) {
       return { texto: '⚠ Otro distrito', clase: 'bg-[#FFF4E5] text-[#B25E00] border-[#F3C677]' };
     }
+    if (d.revisar === true) {
+      const km = d.distanciaMetros != null ? ' (' + (d.distanciaMetros / 1000).toFixed(1) + ' km)' : '';
+      return { texto: '⚠ Revisar' + km, clase: 'bg-[#FFF8E1] text-[#8D6E00] border-[#F0D98C]' };
+    }
     if (this.esAproximada(d)) {
       return d.precision === 'centro' || d.estado === 'centro_distrito'
         ? { texto: '🏙 Centro / aproximada', clase: 'bg-sky-50 text-[#1565C0] border-[#BBDEFB]' }
@@ -857,7 +920,8 @@ export class PlanificadorComponent implements OnInit, OnDestroy {
   }
 
   setFiltroGeo(f: string): void {
-    this.filtroGeo = f as 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' | 'otro_distrito' | 'aproximada' | 'no_verificada';
+    this.filtroGeo = f as 'todas' | 'ubicada' | 'multiple' | 'centro_distrito' | 'no_encontrada' | 'otro_distrito' | 'aproximada' | 'no_verificada' | 'revisar';
+    this.cdr.detectChanges();
   }
 
   async elegirCandidato(d: DetalleGeo, c: CandidatoGeo): Promise<void> {
