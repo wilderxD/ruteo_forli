@@ -15,6 +15,18 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
+      <button type="button" *ngIf="totalSinAsignar > 0" (click)="toggleResaltadoSinAsignar()"
+        title="Hace parpadear en el mapa los pedidos que aún no tienen placa"
+        class="px-3 py-2 text-sm font-semibold rounded-lg transition border"
+        [class.bg-[#B25E00]]="resaltarSinAsignar"
+        [class.border-[#B25E00]]="resaltarSinAsignar"
+        [class.text-white]="resaltarSinAsignar"
+        [class.bg-white]="!resaltarSinAsignar"
+        [class.text-[#9A4F00]]="!resaltarSinAsignar"
+        [class.border-[#B25E00]/40]="!resaltarSinAsignar">
+        <i class="fas" [class.fa-bell]="!resaltarSinAsignar" [class.fa-bell-slash]="resaltarSinAsignar"></i>
+        {{ resaltarSinAsignar ? 'Detener parpadeo' : 'Resaltar sin asignar (' + totalSinAsignar + ')' }}
+      </button>
       <button type="button" (click)="aplicarRuteo()" [disabled]="!hayAsignaciones"
         class="px-3 py-2 text-sm font-semibold text-white bg-[#1565C0] hover:bg-[#0D47A1] rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
         <i class="fas fa-check-double mr-1"></i> Aplicar a "rutas"
@@ -138,6 +150,7 @@
         <p class="mt-1">Usa las flechas para reordenar, el tacho para quitar una parada o <b>Deshacer</b> para revertir el último cambio.</p>
         <p class="mt-1">Si vuelves a hacer clic en un punto de la placa seleccionada, se quita de la ruta.</p>
         <p class="mt-1">Si varios pedidos comparten la misma ubicación, verás un grupo con el número de pedidos. Haz clic en el grupo para separarlos.</p>
+        <p class="mt-1">Usa <b>Resaltar sin asignar</b> para hacer parpadear en el mapa los pedidos que aún no tienen placa.</p>
         <p class="mt-1">Si excedes la capacidad o asignas fuera de zona, se pedirá confirmación.</p>
         <p *ngIf="sinCoordsCount > 0" class="mt-2 text-[#B25E00]">
           <i class="fas fa-exclamation-triangle mr-1"></i>
@@ -154,6 +167,9 @@
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="w-2.5 h-2.5 rounded-full inline-block bg-[#6B7280]"></span> Sin asignar
+        </span>
+        <span *ngIf="resaltarSinAsignar" class="inline-flex items-center gap-1">
+          <span class="w-3 h-3 rounded-full inline-block bg-[#B25E00] ring-2 ring-[#B25E00]/30"></span> Sin asignar resaltado
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="w-3 h-3 rounded-full inline-block"

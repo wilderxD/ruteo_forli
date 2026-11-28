@@ -54,6 +54,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
 
   placaSeleccionada = '';
   borradorRestaurado = false;
+  resaltarSinAsignar = false;
   readonly colores = ['#D32F2F', '#1565C0', '#2E7D32', '#F57C00', '#7B1FA2', '#00695C', '#5D4037', '#C2185B', '#00838F', '#9E9D24'];
 
   private map: L.Map | null = null;
@@ -62,6 +63,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
   private readonly pedidosPorId = new Map<string, PedidoManual>();
   private readonly historial: Record<string, string[]>[] = [];
   private grupoExpandidoKey: string | null = null;
+  private vistaAntesResaltado: { center: L.LatLng; zoom: number } | null = null;
   private static readonly MAX_HISTORIAL = 50;
   private static readonly RADIO_AGRUPACION_METROS = 5;
 
@@ -76,6 +78,10 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
 
   get sinCoordsCount(): number {
     return Math.max(0, (this.datos?.pedidos?.length || 0) - this.pedidosUbicados.length);
+  }
+
+  get totalSinAsignar(): number {
+    return Math.max(0, this.pedidosUbicados.length - this.totalAsignados);
   }
 
   get totalUnidades(): number {
@@ -194,6 +200,58 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     this.renderizarMapa(false);
   }
 
+  /** Alterna el parpadeo de los pedidos que aún no tienen placa. */
+  toggleResaltadoSinAsignar(): void {
+    if (!this.resaltarSinAsignar && this.totalSinAsignar === 0) return;
+
+    this.resaltarSinAsignar = !this.resaltarSinAsignar;
+
+    if (this.resaltarSinAsignar) {
+      if (this.map) {
+        this.vistaAntesResaltado = { center: this.map.getCenter(), zoom: this.map.getZoom() };
+      }
+      this.renderizarMapa(false);
+      this.ajustarVistaSinAsignar();
+    } else {
+      this.renderizarMapa(false);
+      if (this.map && this.vistaAntesResaltado) {
+        this.map.setView(this.vistaAntesResaltado.center, this.vistaAntesResaltado.zoom);
+      }
+      this.vistaAntesResaltado = null;
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  private ajustarVistaSinAsignar(): void {
+    if (!this.map) return;
+
+    const puntos: L.LatLng[] = [];
+    this.pedidosUbicados.forEach(p => {
+      if (this.placaDePedido(this.clavePedido(p))) return;
+      const coord = this.coordenada(p);
+      if (coord) puntos.push(L.latLng(coord.lat, coord.lng));
+    });
+    if (puntos.length === 0) return;
+
+    try {
+      if (puntos.length === 1) {
+        this.map.setView(puntos[0], Math.max(this.map.getZoom(), 15));
+      } else {
+        this.map.fitBounds(L.latLngBounds(puntos).pad(0.15), { maxZoom: 15 });
+      }
+    } catch {
+      /* si el rango no es válido se conserva la vista actual */
+    }
+  }
+
+  private sincronizarResaltado(): void {
+    if (this.resaltarSinAsignar && this.totalSinAsignar === 0) {
+      this.resaltarSinAsignar = false;
+      this.vistaAntesResaltado = null;
+    }
+  }
+
   /** Actualiza en caliente la coordenada de un pedido ya cargado en el mapa.
    *  Se usa cuando el usuario corrige la ubicación desde la tabla o el modal. */
   actualizarUbicacion(pedido: string, lat: number | string, lng: number | string): void {
@@ -276,6 +334,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     ruta.push(id);
     this.rutas.set(placa, ruta);
     this.guardarBorrador();
+    this.sincronizarResaltado();
 
     this.cdr.detectChanges();
     this.renderizarMapa(false);
@@ -293,6 +352,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     this.guardarHistorial();
     ruta.splice(indice, 1);
     this.guardarBorrador();
+    this.sincronizarResaltado();
     this.cdr.detectChanges();
     this.renderizarMapa(false);
   }
@@ -330,6 +390,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     this.guardarHistorial();
     ruta.length = 0;
     this.guardarBorrador();
+    this.sincronizarResaltado();
     this.cdr.detectChanges();
     this.renderizarMapa(false);
   }
@@ -347,6 +408,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     this.guardarHistorial();
     this.rutas.forEach(ruta => { ruta.length = 0; });
     this.guardarBorrador();
+    this.sincronizarResaltado();
     this.cdr.detectChanges();
     this.renderizarMapa(false);
   }
@@ -359,6 +421,7 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
       this.rutas.set(placa, anterior[placa].slice());
     });
     this.guardarBorrador();
+    this.sincronizarResaltado();
     this.cdr.detectChanges();
     this.renderizarMapa(false);
   }
@@ -673,12 +736,19 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     const orden = this.ordenDePedido(id);
     const esPlacaSeleccionada = placa === this.placaSeleccionada;
     const color = placa ? this.colorDePlaca(placa) : '#6B7280';
-    const size = placa ? 24 : 18;
+    const resaltado = !placa && this.resaltarSinAsignar;
+    const size = placa ? 24 : (resaltado ? 22 : 18);
 
-    const html = placa
-      ? '<span class="punto-manual punto-manual--asignado" style="background:' + color
-        + ';opacity:' + (esPlacaSeleccionada ? '1' : '0.45') + '"><span>' + orden + '</span></span>'
-      : '<span class="punto-manual"></span>';
+    let html: string;
+    if (placa) {
+      html = '<span class="punto-manual punto-manual--asignado" style="background:' + color
+        + ';opacity:' + (esPlacaSeleccionada ? '1' : '0.45') + '"><span>' + orden + '</span></span>';
+    } else if (resaltado) {
+      html = '<span class="punto-manual punto-manual--sin-asignar-resaltado">'
+        + '<i class="fas fa-exclamation"></i></span>';
+    } else {
+      html = '<span class="punto-manual"></span>';
+    }
 
     const icon = L.divIcon({
       className: '',
@@ -706,12 +776,17 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
     const capas = this.capas;
     if (!capas) return;
 
+    const sinAsignar = this.pedidosSinAsignar(grupo).length;
+    const destacar = this.resaltarSinAsignar && sinAsignar > 0;
     const color = this.colorGrupo(grupo);
     const html = '<span class="punto-manual punto-manual--grupo'
       + (expandido ? ' punto-manual--grupo-abierto' : '')
+      + (destacar ? ' punto-manual--grupo-sin-asignar' : '')
       + '" style="background:' + color + '"><span>'
       + (expandido ? '−' : grupo.pedidos.length)
-      + '</span></span>';
+      + '</span>'
+      + (destacar ? '<span class="punto-manual__badge">' + sinAsignar + '</span>' : '')
+      + '</span>';
 
     const icon = L.divIcon({
       className: '',
@@ -738,6 +813,10 @@ export class RuteoManualComponent implements AfterViewInit, OnDestroy {
   private alternarGrupo(key: string): void {
     this.grupoExpandidoKey = this.grupoExpandidoKey === key ? null : key;
     this.renderizarMapa(false);
+  }
+
+  private pedidosSinAsignar(grupo: GrupoUbicacion): PedidoManual[] {
+    return grupo.pedidos.filter(p => !this.placaDePedido(this.clavePedido(p)));
   }
 
   private colorGrupo(grupo: GrupoUbicacion): string {

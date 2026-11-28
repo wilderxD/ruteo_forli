@@ -185,19 +185,24 @@ export class ExcelService {
   generarExcelRutaDelDia(rutas: unknown[][], asignacion: unknown[][], sufijo?: string): void {
     const choferApellido: Record<string, string> = {};
     for (let i = 1; i < asignacion.length; i++) {
-      const p = String(asignacion[i][0] || '');
+      const p = String(asignacion[i][0] || '').trim();
       const n = String(asignacion[i][1] || 'Chofer');
       choferApellido[p] = n.trim().split(' ')[0].toUpperCase();
     }
 
     const datosPorPlaca: Record<string, unknown[][]> = {};
+    const sinRuta: unknown[][] = [];
     for (let i = 1; i < rutas.length; i++) {
       const r = rutas[i];
-      const placa = String(r[12] || '');
+      if (!r) continue;
+      const placa = String(r[12] || '').trim();
       if (placa) {
         if (!datosPorPlaca[placa]) datosPorPlaca[placa] = [];
         datosPorPlaca[placa].push(r);
+        continue;
       }
+      // Sin placa pero con pedido: quedó sin asignar en ningún camión.
+      if (String(r[10] || '').trim()) sinRuta.push(r);
     }
 
     const aoa: XLSX.CellObject[][] = [];
@@ -205,13 +210,9 @@ export class ExcelService {
     const altoFilas: XLSX.RowInfo[] = [];
     let rowIndex = 0;
 
-    for (const placa in datosPorPlaca) {
-      const items = datosPorPlaca[placa];
-      items.sort((a, b) => (parseInt(a[13] as string) || 9999) - (parseInt(b[13] as string) || 9999));
-      const ePlaca = (choferApellido[placa] || 'CHOFER') + ' ' + placa;
-
+    const agregarTabla = (titulo: string, items: unknown[][]): void => {
       const filaTitulo = Array.from({ length: 13 }, (_, columna) =>
-        this.celda(columna === 0 ? ePlaca : '', ESTILO_TITULO)
+        this.celda(columna === 0 ? titulo : '', ESTILO_TITULO)
       );
       aoa.push(filaTitulo);
       altoFilas.push({ hpt: 32 });
@@ -219,7 +220,7 @@ export class ExcelService {
       rowIndex++;
 
       const cabecera = ['TIENDA', 'TIPO', 'CLIENTE', 'DIRECCION', 'REFERENCIA', 'DISTRITO', 'TELEFONO', 'CODIGO', 'MODELOL', 'CANTIDAD', 'PEDIDO', 'ORDEN_ENTREGA.', 'OBSERVACIONES'];
-      aoa.push(cabecera.map(titulo => this.celda(titulo, ESTILO_CABECERA_RUTA)));
+      aoa.push(cabecera.map(campo => this.celda(campo, ESTILO_CABECERA_RUTA)));
       altoFilas.push({ hpt: 15 });
       rowIndex++;
 
@@ -237,6 +238,16 @@ export class ExcelService {
       aoa.push([]);
       altoFilas.push({ hpt: 8 });
       rowIndex++;
+    };
+
+    for (const placa in datosPorPlaca) {
+      const items = datosPorPlaca[placa];
+      items.sort((a, b) => (parseInt(a[13] as string) || 9999) - (parseInt(b[13] as string) || 9999));
+      agregarTabla((choferApellido[placa] || 'CHOFER') + ' ' + placa, items);
+    }
+
+    if (sinRuta.length > 0) {
+      agregarTabla('PEDIDOS SIN RUTA', sinRuta);
     }
 
     const ws = this.crearHoja(aoa, altoFilas);
